@@ -21,6 +21,7 @@ func GetStudent(w http.ResponseWriter, r *http.Request, client *firestore.Client
 		return
 	}
 
+	// Get the document from the "students" collection
 	doc, err := client.Collection("students").Doc(studentID).Get(ctx)
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
@@ -32,6 +33,7 @@ func GetStudent(w http.ResponseWriter, r *http.Request, client *firestore.Client
 		return
 	}
 
+	// Map the document data to the Student struct
 	var student models.Student
 	err = doc.DataTo(&student)
 	if err != nil {
@@ -40,7 +42,7 @@ func GetStudent(w http.ResponseWriter, r *http.Request, client *firestore.Client
 		return
 	}
 
-	// Convert the student struct to JSON and send it as the response
+	// Respond with JSON data
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(student)
 }
