@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up with Google</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <meta name="google-signin-client_id" content="816735850636-9dut6fodvaco64n1q5bvb6d489ion377.apps.googleusercontent.com">
+    <script src="js/auth.js" defer></script>
+</head>
+<body>
+    <h1>Sign Up</h1>
+    <div id="g_id_onload"
+         data-client_id="816735850636-9dut6fodvaco64n1q5bvb6d489ion377.apps.googleusercontent.com"
+         data-context="signup"
+         data-ux_mode="popup"
+         data-login_uri="http://localhost:8080/create-parent"
+         data-auto_prompt="false">
+    </div>
+
+    <div class="g_id_signin"
+         data-type="standard"
+         data-shape="rectangular"
+         data-theme="outline"
+         data-text="sign_up_with"
+         data-size="large"
+         data-logo_alignment="left">
+    </div>
+</body>
+</html>
