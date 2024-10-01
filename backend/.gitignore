@@ -1,0 +1,8 @@
+# .gitignore
+
+# Environment variables
+.env
+
+# Service account credentials
+serviceAccount.json
+gcloudCredentials.json

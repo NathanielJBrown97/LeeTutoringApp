@@ -1,20 +1,24 @@
 # Go build artifacts
 /bin/
-/pkg/
-/dist/
+ /pkg/
+ /dist/
 *.exe
 *.log
 
 # Configuration files
 backend/serviceAccountKey.json
-
-# Node.js (if working with a frontend in the same repo)
-/node_modules/
-/frontend/build/
-/frontend/dist/
+backend/gcloudCredentials.json
 
 # Ignore .env files (common for environment variables)
 .env
+**/.env
+
+# Ignore Go module files
+go.mod
+go.sum
+
+# Ignore Dockerfile
+Dockerfile
 
 # Ignore system files (macOS, Windows, Linux)
 .DS_Store

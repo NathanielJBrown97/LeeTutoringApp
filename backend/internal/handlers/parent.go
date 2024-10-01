@@ -7,10 +7,9 @@ import (
 	"net/http"
 
 	"cloud.google.com/go/firestore"
+	"github.com/NathanielJBrown97/LeeTutoringApp/backend/internal/models"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"github.com/NathanielJBrown97/LeeTutoringApp/backend/models"
 )
 
 func GetParent(w http.ResponseWriter, r *http.Request, client *firestore.Client) {

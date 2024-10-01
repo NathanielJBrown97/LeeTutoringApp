@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parent Intake - Step 1</title>
+</head>
+<body>
+    <h1>Link Students to Your Account</h1>
+    <form id="studentForm" action="/submitStudentIDs" method="POST">
+        <!-- Hidden field to pass userID -->
+        <input type="hidden" name="userID" value="{{.UserID}}">
+    
+        <label for="numStudents">How many students are you linking?</label>
+        <select id="numStudents" name="numStudents" onchange="generateStudentInputs()">
+            <option value="0">Select number of students</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+        </select>
+        
+        <div id="studentInputs"></div>
+        
+        <button type="submit">Submit</button>
+        <button type="button" onclick="location.href='/parentdashboard';">Do This Later</button>
+    </form>
+
+    <script>
+        function generateStudentInputs() {
+            const numStudents = document.getElementById('numStudents').value;
+            const studentInputs = document.getElementById('studentInputs');
+            studentInputs.innerHTML = ''; // Clear any existing inputs
+
+            for (let i = 0; i < numStudents; i++) {
+                const inputDiv = document.createElement('div');
+                inputDiv.innerHTML = `
+                    <label for="studentId${i + 1}">Student ID ${i + 1}:</label>
+                    <input type="text" name="studentId${i + 1}" placeholder="Enter Student ID ${i + 1}" required>
+                    <br><br>
+                `;
+                studentInputs.appendChild(inputDiv);
+            }
+        }
+
+    </script>
+</body>
+</html>
