@@ -36,6 +36,7 @@ type Config struct {
 	MICROSOFT_CLIENT_ID     string `env:"MICROSOFT_CLIENT_ID,required"`
 	MICROSOFT_CLIENT_SECRET string `env:"MICROSOFT_CLIENT_SECRET,required"`
 	MICROSOFT_REDIRECT_URL  string `env:"MICROSOFT_REDIRECT_URL,required"`
+	MICROSOFT_TENANT_ID     string `env:"MICROSOFT_TENANT_ID,required"`
 }
 
 // LoadConfig loads environment variables and returns a Config struct

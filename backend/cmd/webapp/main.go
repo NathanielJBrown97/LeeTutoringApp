@@ -6,11 +6,11 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/NathanielJBrown97/LeeTutoringApp/backend/internal/config"
-	"github.com/NathanielJBrown97/LeeTutoringApp/backend/internal/dashboard"
-	googleauth "github.com/NathanielJBrown97/LeeTutoringApp/backend/internal/googleauth"
-	microsoftauth "github.com/NathanielJBrown97/LeeTutoringApp/backend/internal/microsoftauth"
-	parentpkg "github.com/NathanielJBrown97/LeeTutoringApp/backend/internal/parent"
+	"github.com/NathanielJBrown97/LeeTutoringApp/internal/config"
+	"github.com/NathanielJBrown97/LeeTutoringApp/internal/dashboard"
+	googleauth "github.com/NathanielJBrown97/LeeTutoringApp/internal/googleauth"
+	microsoftauth "github.com/NathanielJBrown97/LeeTutoringApp/internal/microsoftauth"
+	parentpkg "github.com/NathanielJBrown97/LeeTutoringApp/internal/parent"
 	"github.com/gorilla/sessions"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -61,8 +61,8 @@ func main() {
 		ClientID:     cfg.MICROSOFT_CLIENT_ID,
 		ClientSecret: cfg.MICROSOFT_CLIENT_SECRET,
 		RedirectURL:  cfg.MICROSOFT_REDIRECT_URL,
-		Scopes:       []string{"openid", "profile", "email", "offline_access", "https://graph.microsoft.com/User.Read"},
-		Endpoint:     microsoft.AzureADEndpoint("common"), // Replace "common" with your tenant ID if needed
+		Scopes:       []string{"openid", "profile", "email", "offline_access"},
+		Endpoint:     microsoft.AzureADEndpoint("common"), // Use "common" to support all account types
 	}
 	microsoftApp := microsoftauth.App{
 		Config:          cfg,
@@ -98,7 +98,7 @@ func main() {
 	mux.HandleFunc("/internal/microsoftauth/callback", microsoftApp.OAuthCallbackHandler)
 
 	// Parent dashboard handler
-	mux.HandleFunc("/parentdashboard", dashboardApp.Handler) // Updated line
+	mux.HandleFunc("/parentdashboard", dashboardApp.Handler)
 
 	// Parent intake page
 	mux.HandleFunc("/parentintake", func(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +109,7 @@ func main() {
 
 	// Parental intake handling routes
 	mux.HandleFunc("/submitStudentIDs", parentApp.StudentIntakeHandler)
-	mux.HandleFunc("/confirmLinkStudents", parentApp.ConfirmLinkStudentsHandler) // Ensure this handler is defined similarly
+	mux.HandleFunc("/confirmLinkStudents", parentApp.ConfirmLinkStudentsHandler)
 
 	// Start the HTTP server
 	log.Printf("Server started on http://localhost:%s", cfg.PORT)

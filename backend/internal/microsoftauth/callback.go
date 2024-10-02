@@ -4,10 +4,13 @@ package microsoftauth
 
 import (
 	"context"
+	"encoding/json"
+	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"cloud.google.com/go/firestore"
-	"google.golang.org/api/idtoken"
+	"github.com/coreos/go-oidc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -18,50 +21,107 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	// Exchange the authorization code for a token
 	token, err := a.OAuthConfig.Exchange(context.Background(), code)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Failed to exchange token: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// Use the existing Firestore client from App
-	firestoreClient := a.FirestoreClient
-
-	// Get user information from the ID token
-	idTokenStr, ok := token.Extra("id_token").(string)
+	// Extract the ID Token from OAuth2 token
+	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok {
 		http.Error(w, "No ID token found", http.StatusBadRequest)
 		return
 	}
 
-	payload, err := idtoken.Validate(context.Background(), idTokenStr, a.Config.MICROSOFT_CLIENT_ID)
+	// Manually fetch the OpenID Connect discovery document
+	providerURL := "https://login.microsoftonline.com/common/v2.0"
+	resp, err := http.Get(providerURL + "/.well-known/openid-configuration")
 	if err != nil {
-		http.Error(w, "Failed to validate ID token", http.StatusInternalServerError)
+		http.Error(w, "Failed to get provider configuration: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, "Failed to get provider configuration: "+resp.Status, http.StatusInternalServerError)
 		return
 	}
 
-	userID, ok := payload.Claims["sub"].(string)
-	if !ok {
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		http.Error(w, "Failed to read provider configuration: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	email, ok := payload.Claims["email"].(string)
-	if !ok {
-		http.Error(w, "Invalid email", http.StatusBadRequest)
+	var providerData struct {
+		Issuer  string `json:"issuer"`
+		JWKSURI string `json:"jwks_uri"`
+	}
+
+	if err := json.Unmarshal(body, &providerData); err != nil {
+		http.Error(w, "Failed to parse provider configuration: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	// Set up an OpenID Connect verifier with the dynamic issuer
+	oidcConfig := &oidc.Config{
+		ClientID:             a.Config.MICROSOFT_CLIENT_ID,
+		SkipIssuerCheck:      true, // We'll handle issuer check manually
+		SupportedSigningAlgs: []string{"RS256"},
+	}
+
+	keySet := oidc.NewRemoteKeySet(context.Background(), providerData.JWKSURI)
+	verifier := oidc.NewVerifier(providerData.Issuer, keySet, oidcConfig)
+
+	// Verify the ID token
+	idToken, err := verifier.Verify(context.Background(), rawIDToken)
+	if err != nil {
+		http.Error(w, "Failed to verify ID token: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Manually validate the issuer
+	expectedIssuerPrefix := "https://login.microsoftonline.com/"
+	expectedIssuerSuffix := "/v2.0"
+	issuer := idToken.Issuer
+
+	if !strings.HasPrefix(issuer, expectedIssuerPrefix) || !strings.HasSuffix(issuer, expectedIssuerSuffix) {
+		http.Error(w, "Invalid issuer: "+issuer, http.StatusUnauthorized)
+		return
+	}
+
+	// Extract user claims
+	var claims struct {
+		Sub               string `json:"sub"`
+		PreferredUsername string `json:"preferred_username"`
+		Email             string `json:"email"`
+	}
+
+	if err := idToken.Claims(&claims); err != nil {
+		http.Error(w, "Failed to parse claims: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	userID := claims.Sub
+	email := claims.Email
+	if email == "" {
+		email = claims.PreferredUsername
 	}
 
 	// Store userID in session
 	session, err := a.Store.Get(r, "session-name")
 	if err != nil {
-		http.Error(w, "Failed to get session", http.StatusInternalServerError)
+		http.Error(w, "Failed to get session: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	session.Values["user_id"] = userID
 	err = session.Save(r, w)
 	if err != nil {
-		http.Error(w, "Failed to save session", http.StatusInternalServerError)
+		http.Error(w, "Failed to save session: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// Use the existing Firestore client from App
+	firestoreClient := a.FirestoreClient
 
 	// Check if the user already exists in Firestore
 	docRef := firestoreClient.Collection("parents").Doc(userID)
@@ -79,7 +139,7 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 				"associated_students": []interface{}{},
 			})
 			if err != nil {
-				http.Error(w, "Failed to create user document in Firestore", http.StatusInternalServerError)
+				http.Error(w, "Failed to create user document in Firestore: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 
@@ -87,7 +147,7 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/parentintake", http.StatusSeeOther)
 			return
 		} else {
-			http.Error(w, "Failed to check user existence in Firestore", http.StatusInternalServerError)
+			http.Error(w, "Failed to check user existence in Firestore: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
@@ -101,7 +161,7 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 			{Path: "expiry", Value: token.Expiry},
 		})
 		if err != nil {
-			http.Error(w, "Failed to update user tokens in Firestore", http.StatusInternalServerError)
+			http.Error(w, "Failed to update user tokens in Firestore: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
@@ -115,7 +175,7 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 			{Path: "associated_students", Value: associatedStudents},
 		})
 		if err != nil {
-			http.Error(w, "Failed to initialize associated_students in Firestore", http.StatusInternalServerError)
+			http.Error(w, "Failed to initialize associated_students in Firestore: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 

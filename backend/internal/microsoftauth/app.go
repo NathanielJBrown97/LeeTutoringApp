@@ -4,7 +4,7 @@ package microsoftauth
 
 import (
 	"cloud.google.com/go/firestore"
-	"github.com/NathanielJBrown97/LeeTutoringApp/backend/internal/config"
+	"github.com/NathanielJBrown97/LeeTutoringApp/internal/config"
 	"github.com/gorilla/sessions"
 	"golang.org/x/oauth2"
 )

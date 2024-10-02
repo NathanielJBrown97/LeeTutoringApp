@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"cloud.google.com/go/firestore"
-	"github.com/NathanielJBrown97/LeeTutoringApp/backend/internal/models"
+	"github.com/NathanielJBrown97/LeeTutoringApp/internal/models"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
