@@ -6,33 +6,102 @@ import (
 	"context"
 	"errors"
 	"log"
+
+	"cloud.google.com/go/firestore"
 )
+
+var ErrNoAssociatedStudents = errors.New("no associated students found")
+
+// checkAndAssociateStudents checks if the parent has associated students and performs automatic association if needed
+func (a *App) checkAndAssociateStudents(parentDocumentID string, parentEmail string) error {
+	ctx := context.Background()
+
+	// Reference to the parent's document
+	parentDocRef := a.FirestoreClient.Collection("parents").Doc(parentDocumentID)
+
+	// Fetch the parent document
+	parentDocSnap, err := parentDocRef.Get(ctx)
+	if err != nil {
+		log.Printf("Error fetching parent document: %v", err)
+		return err
+	}
+
+	// Check if 'associated_students' field exists
+	var associatedStudents []interface{}
+	if val, exists := parentDocSnap.Data()["associated_students"]; exists {
+		associatedStudents, _ = val.([]interface{})
+	}
+
+	// If parent already has associated students, do nothing
+	if len(associatedStudents) > 0 {
+		return nil
+	}
+
+	// If no email is available, cannot proceed
+	if parentEmail == "" {
+		log.Println("Parent email not available in session")
+		return ErrNoAssociatedStudents
+	}
+
+	// Search for students with matching 'personal.parent_email'
+	studentsCollection := a.FirestoreClient.Collection("students")
+	query := studentsCollection.Where("personal.parent_email", "==", parentEmail)
+	studentDocs, err := query.Documents(ctx).GetAll()
+	if err != nil {
+		log.Printf("Error querying students by parent_email: %v", err)
+		return err
+	}
+
+	// If no students found, return error
+	if len(studentDocs) == 0 {
+		log.Printf("No students found with parent_email: %s", parentEmail)
+		return ErrNoAssociatedStudents
+	}
+
+	// Extract student IDs
+	var studentIDs []string
+	for _, doc := range studentDocs {
+		studentIDs = append(studentIDs, doc.Ref.ID)
+	}
+
+	// Update the parent's 'associated_students' field
+	_, err = parentDocRef.Set(ctx, map[string]interface{}{
+		"associated_students": studentIDs,
+	}, firestore.MergeAll)
+	if err != nil {
+		log.Printf("Error updating parent's associated_students: %v", err)
+		return err
+	}
+
+	log.Printf("Automatically associated students %v with parent %s", studentIDs, parentDocumentID)
+	return nil
+}
 
 // fetchStudentData fetches the student data based on the parent document ID and the selected student ID.
 func (a *App) fetchStudentData(parentDocumentID string, selectedStudentID string) (*DashboardData, error) {
 	ctx := context.Background()
 
-	// Fetch the parent document using the provided parentDocumentID
+	// Fetch the parent document
 	parentDoc, err := a.FirestoreClient.Collection("parents").Doc(parentDocumentID).Get(ctx)
 	if err != nil {
 		log.Printf("Error fetching parent document: %v", err)
 		return nil, err
 	}
 
-	// Extract associated_students array from the parent document
-	associatedStudents, ok := parentDoc.Data()["associated_students"].([]interface{})
-	if !ok || len(associatedStudents) == 0 {
-		log.Println("No associated students found or unable to cast associated_students to []interface{}")
-		return nil, errors.New("no associated students found")
+	// Extract associated_students array
+	associatedStudentsInterface, ok := parentDoc.Data()["associated_students"].([]interface{})
+	if !ok || len(associatedStudentsInterface) == 0 {
+		log.Println("No associated students found for parent")
+		return nil, ErrNoAssociatedStudents
 	}
 
 	var students []Student
 	var studentName, teamLead string
 	var remainingHours int
-	var associatedTutors []string
-	var actScores []int64
+	associatedTutors := []string{}
+	actScores := []int64{}
 
-	for _, s := range associatedStudents {
+	for _, s := range associatedStudentsInterface {
 		studentID, ok := s.(string)
 		if !ok {
 			log.Println("Error casting student ID to string")
@@ -62,10 +131,10 @@ func (a *App) fetchStudentData(parentDocumentID string, selectedStudentID string
 		remainingHoursVal, hoursOk := businessData["remaining_hours"].(int64)
 		lead, leadOk := businessData["team_lead"].(string)
 
-		tutors, tutorsOk := businessData["associated_tutors"].([]interface{})
+		tutorsInterface, tutorsOk := businessData["associated_tutors"].([]interface{})
 		if tutorsOk {
 			associatedTutors = []string{}
-			for _, tutor := range tutors {
+			for _, tutor := range tutorsInterface {
 				if tutorStr, ok := tutor.(string); ok {
 					associatedTutors = append(associatedTutors, tutorStr)
 				}
@@ -75,11 +144,15 @@ func (a *App) fetchStudentData(parentDocumentID string, selectedStudentID string
 		// Fetch the most recent ACT scores
 		actDoc, err := studentDoc.Ref.Collection("tests").Doc("most_recent_act").Get(ctx)
 		if err == nil {
-			if scores, ok := actDoc.Data()["most_recent_act"].([]interface{}); ok {
-				actScores = make([]int64, len(scores))
-				for i, score := range scores {
-					if s, ok := score.(int64); ok {
-						actScores[i] = s
+			scoresInterface, ok := actDoc.Data()["most_recent_act"].([]interface{})
+			if ok {
+				actScores = []int64{}
+				for _, score := range scoresInterface {
+					switch v := score.(type) {
+					case int64:
+						actScores = append(actScores, v)
+					case float64:
+						actScores = append(actScores, int64(v))
 					}
 				}
 			}

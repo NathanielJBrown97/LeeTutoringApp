@@ -12,6 +12,7 @@ import (
 	microsoftauth "github.com/NathanielJBrown97/LeeTutoringApp/internal/microsoftauth"
 	parentpkg "github.com/NathanielJBrown97/LeeTutoringApp/internal/parent"
 	"github.com/gorilla/sessions"
+	"github.com/rs/cors"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"golang.org/x/oauth2/microsoft"
@@ -33,11 +34,12 @@ func main() {
 
 	// Initialize session store with secret from config
 	store := sessions.NewCookieStore([]byte(cfg.SESSION_SECRET))
-	// Optionally, set session options
+	// Set session options
 	store.Options = &sessions.Options{
 		Path:     "/",
 		MaxAge:   86400 * 7, // 7 days
 		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode, // Adjust as needed
 		// Secure:   true, // Uncomment when using HTTPS
 	}
 
@@ -88,32 +90,34 @@ func main() {
 	// Set up the HTTP server and routes
 	mux := http.NewServeMux()
 
-	// Google OAuth handlers
-	mux.HandleFunc("/", googleApp.LoginHandler)
+	// API routes
+	mux.HandleFunc("/api/dashboard", dashboardApp.Handler)
+	mux.HandleFunc("/api/submitStudentIDs", parentApp.StudentIntakeHandler)
+	mux.HandleFunc("/api/confirmLinkStudents", parentApp.ConfirmLinkStudentsHandler)
+
+	// OAuth handlers
 	mux.HandleFunc("/internal/googleauth/oauth", googleApp.OAuthHandler)
 	mux.HandleFunc("/internal/googleauth/callback", googleApp.OAuthCallbackHandler)
-
-	// Microsoft OAuth handlers
 	mux.HandleFunc("/internal/microsoftauth/oauth", microsoftApp.OAuthHandler)
 	mux.HandleFunc("/internal/microsoftauth/callback", microsoftApp.OAuthCallbackHandler)
 
-	// Parent dashboard handler
-	mux.HandleFunc("/parentdashboard", dashboardApp.Handler)
+	// Optionally serve static files (in production)
+	// Commented out during development
+	// fs := http.FileServer(http.Dir("./frontend/build"))
+	// mux.Handle("/", fs)
 
-	// Parent intake page
-	mux.HandleFunc("/parentintake", func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("ParentIntake received a %s request\n", r.Method)
-		log.Printf("Headers: %v\n", r.Header)
-		http.ServeFile(w, r, "parentintake.html")
+	// Use CORS middleware
+	c := cors.New(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:3000"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization"},
+		AllowCredentials: true,
 	})
-
-	// Parental intake handling routes
-	mux.HandleFunc("/submitStudentIDs", parentApp.StudentIntakeHandler)
-	mux.HandleFunc("/confirmLinkStudents", parentApp.ConfirmLinkStudentsHandler)
+	handler := c.Handler(mux)
 
 	// Start the HTTP server
 	log.Printf("Server started on http://localhost:%s", cfg.PORT)
-	err = http.ListenAndServe(":"+cfg.PORT, mux)
+	err = http.ListenAndServe(":"+cfg.PORT, handler)
 	if err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}

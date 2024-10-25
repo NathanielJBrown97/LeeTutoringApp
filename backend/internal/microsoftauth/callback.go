@@ -95,7 +95,6 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		PreferredUsername string `json:"preferred_username"`
 		Email             string `json:"email"`
 	}
-
 	if err := idToken.Claims(&claims); err != nil {
 		http.Error(w, "Failed to parse claims: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -107,13 +106,16 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		email = claims.PreferredUsername
 	}
 
-	// Store userID in session
+	// Store userID and email in session
 	session, err := a.Store.Get(r, "session-name")
 	if err != nil {
 		http.Error(w, "Failed to get session: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	session.Values["user_id"] = userID
+	session.Values["user_email"] = email // Store the email in the session
+
+	// Save the session
 	err = session.Save(r, w)
 	if err != nil {
 		http.Error(w, "Failed to save session: "+err.Error(), http.StatusInternalServerError)
@@ -143,8 +145,8 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			// Redirect to the parent intake page
-			http.Redirect(w, r, "/parentintake", http.StatusSeeOther)
+			// Redirect to the parent dashboard (automatic association will occur there)
+			http.Redirect(w, r, "/parentdashboard", http.StatusSeeOther)
 			return
 		} else {
 			http.Error(w, "Failed to check user existence in Firestore: "+err.Error(), http.StatusInternalServerError)
@@ -154,36 +156,30 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	// User exists, optionally update tokens if they have changed
 	data := doc.Data()
-	if data["access_token"] != token.AccessToken || data["refresh_token"] != token.RefreshToken {
-		_, err = docRef.Update(context.Background(), []firestore.Update{
-			{Path: "access_token", Value: token.AccessToken},
-			{Path: "refresh_token", Value: token.RefreshToken},
-			{Path: "expiry", Value: token.Expiry},
-		})
+	needsUpdate := false
+	updates := []firestore.Update{}
+
+	if data["access_token"] != token.AccessToken {
+		updates = append(updates, firestore.Update{Path: "access_token", Value: token.AccessToken})
+		needsUpdate = true
+	}
+	if data["refresh_token"] != token.RefreshToken {
+		updates = append(updates, firestore.Update{Path: "refresh_token", Value: token.RefreshToken})
+		needsUpdate = true
+	}
+	if data["expiry"] != token.Expiry {
+		updates = append(updates, firestore.Update{Path: "expiry", Value: token.Expiry})
+		needsUpdate = true
+	}
+
+	if needsUpdate {
+		_, err = docRef.Update(context.Background(), updates)
 		if err != nil {
 			http.Error(w, "Failed to update user tokens in Firestore: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
 
-	// Check if associated_students array exists and is not empty
-	associatedStudents, ok := data["associated_students"].([]interface{})
-	if !ok || len(associatedStudents) == 0 {
-		// Initialize the associated_students field as an empty array if it doesn't exist or is empty
-		associatedStudents = []interface{}{}
-		_, err = docRef.Update(context.Background(), []firestore.Update{
-			{Path: "associated_students", Value: associatedStudents},
-		})
-		if err != nil {
-			http.Error(w, "Failed to initialize associated_students in Firestore: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// Redirect to the parent intake page
-		http.Redirect(w, r, "/parentintake", http.StatusSeeOther)
-		return
-	}
-
-	// Redirect to the parent dashboard
+	// Redirect to the parent dashboard (automatic association will occur there)
 	http.Redirect(w, r, "/parentdashboard", http.StatusSeeOther)
 }

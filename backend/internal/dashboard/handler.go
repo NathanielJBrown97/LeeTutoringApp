@@ -3,33 +3,54 @@
 package dashboard
 
 import (
-	"html/template"
+	"encoding/json"
 	"log"
 	"net/http"
 )
 
 // DashboardData represents the data structure for rendering the dashboard
 type DashboardData struct {
-	StudentName        string
-	RemainingHours     int
-	TeamLead           string
-	AssociatedTutors   []string
-	AssociatedStudents []Student
-	RecentActScores    []int64
+	StudentName        string    `json:"studentName"`
+	RemainingHours     int       `json:"remainingHours"`
+	TeamLead           string    `json:"teamLead"`
+	AssociatedTutors   []string  `json:"associatedTutors"`
+	AssociatedStudents []Student `json:"associatedStudents"`
+	RecentActScores    []int64   `json:"recentActScores"`
+	NeedsStudentIntake bool      `json:"needsStudentIntake"`
 }
 
 // Student represents a student's basic details.
 type Student struct {
-	ID   string
-	Name string
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
-// Handler renders the parent dashboard
+// Handler serves the dashboard data as JSON
 func (a *App) Handler(w http.ResponseWriter, r *http.Request) {
-	// Retrieve the parent document ID from the session
-	parentDocumentID := a.getParentDocumentID(r)
-	if parentDocumentID == "" {
+	// Retrieve the parent document ID and email from the session
+	parentDocumentID, parentEmail := a.getParentCredentials(r)
+	if parentDocumentID == "" || parentEmail == "" {
 		http.Error(w, "Unable to identify parent user", http.StatusUnauthorized)
+		return
+	}
+
+	// Check and perform automatic association if needed
+	err := a.checkAndAssociateStudents(parentDocumentID, parentEmail)
+	if err != nil {
+		if err == ErrNoAssociatedStudents {
+			// Return a JSON response indicating that student intake is needed
+			w.Header().Set("Content-Type", "application/json")
+			err = json.NewEncoder(w).Encode(DashboardData{
+				NeedsStudentIntake: true,
+			})
+			if err != nil {
+				log.Printf("Error encoding JSON response: %v", err)
+				http.Error(w, "Unable to encode JSON response", http.StatusInternalServerError)
+			}
+			return
+		}
+		log.Printf("Error during automatic student association: %v", err)
+		http.Error(w, "Unable to associate students", http.StatusInternalServerError)
 		return
 	}
 
@@ -44,78 +65,33 @@ func (a *App) Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Render the template with the retrieved data
-	err = a.RenderTemplate(w, data)
+	// Set response headers and encode data as JSON
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(data)
 	if err != nil {
-		log.Printf("Error rendering template: %v", err)
-		http.Error(w, "Unable to render template", http.StatusInternalServerError)
+		log.Printf("Error encoding JSON response: %v", err)
+		http.Error(w, "Unable to encode JSON response", http.StatusInternalServerError)
 		return
 	}
 }
 
-// getParentDocumentID retrieves the parent document ID based on the logged-in user session
-func (a *App) getParentDocumentID(r *http.Request) string {
+// getParentCredentials retrieves the parent document ID and email based on the logged-in user session
+func (a *App) getParentCredentials(r *http.Request) (string, string) {
 	// Retrieve the session using the session store
 	session, err := a.Store.Get(r, "session-name")
 	if err != nil {
 		log.Printf("Failed to retrieve session: %v", err)
-		return ""
+		return "", ""
 	}
 	userID, ok := session.Values["user_id"].(string)
 	if !ok || userID == "" {
 		log.Println("User ID not found in session")
-		return ""
+		return "", ""
 	}
-	return userID
-}
-
-// RenderTemplate renders the dashboard template with the provided data
-func (a *App) RenderTemplate(w http.ResponseWriter, data *DashboardData) error {
-	tmpl := `
-	<!DOCTYPE html>
-	<html lang="en">
-	<head>
-		<meta charset="UTF-8">
-		<title>Parent Dashboard</title>
-	</head>
-	<body>
-		<h1>Welcome to the Parent Dashboard</h1>
-		<p>Student Name: {{.StudentName}}</p>
-		<p>Remaining Hours: {{.RemainingHours}}</p>
-		<p>Team Lead: {{.TeamLead}}</p>
-		<h2>Associated Tutors</h2>
-		<ul>
-			{{range .AssociatedTutors}}
-				<li>{{.}}</li>
-			{{end}}
-		</ul>
-		<h2>Associated Students</h2>
-		<ul>
-			{{range .AssociatedStudents}}
-				<li>{{.Name}}</li>
-			{{end}}
-		</ul>
-		<h2>Recent ACT Scores</h2>
-		<ul>
-			{{range .RecentActScores}}
-				<li>{{.}}</li>
-			{{end}}
-		</ul>
-	</body>
-	</html>
-	`
-
-	t, err := template.New("dashboard").Parse(tmpl)
-	if err != nil {
-		log.Printf("Failed to parse template: %v", err)
-		return err
+	userEmail, ok := session.Values["user_email"].(string)
+	if !ok || userEmail == "" {
+		log.Println("User email not found in session")
+		return userID, ""
 	}
-
-	err = t.Execute(w, data)
-	if err != nil {
-		log.Printf("Failed to execute template: %v", err)
-		return err
-	}
-
-	return nil
+	return userID, userEmail
 }

@@ -1,15 +1,21 @@
-// backend/internal/parent/confirm_link_students.go
-
 package parent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"cloud.google.com/go/firestore"
 )
+
+func sliceStringsToInterfaces(slice []string) []interface{} {
+	interfaces := make([]interface{}, len(slice))
+	for i, v := range slice {
+		interfaces[i] = v
+	}
+	return interfaces
+}
 
 // ConfirmLinkStudentsHandler handles the confirmation of linking students
 func (a *App) ConfirmLinkStudentsHandler(w http.ResponseWriter, r *http.Request) {
@@ -32,12 +38,23 @@ func (a *App) ConfirmLinkStudentsHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Parse the form data
-	err = r.ParseForm()
+	// Parse the JSON request body
+	var requestData struct {
+		ConfirmedStudentIDs []string `json:"confirmedStudentIds"`
+	}
+	err = json.NewDecoder(r.Body).Decode(&requestData)
 	if err != nil {
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		http.Error(w, "Failed to parse JSON request body", http.StatusBadRequest)
 		return
 	}
+
+	if len(requestData.ConfirmedStudentIDs) == 0 {
+		http.Error(w, "No confirmed student IDs provided", http.StatusBadRequest)
+		return
+	}
+
+	// Convert []string to []interface{}
+	confirmedStudentIDsInterface := sliceStringsToInterfaces(requestData.ConfirmedStudentIDs)
 
 	// Use the existing Firestore client from App
 	firestoreClient := a.FirestoreClient
@@ -45,23 +62,20 @@ func (a *App) ConfirmLinkStudentsHandler(w http.ResponseWriter, r *http.Request)
 	// Reference to the parent's document using the userID from the session
 	parentDocRef := firestoreClient.Collection("parents").Doc(userID)
 
-	// Loop through the form data and link confirmed students
-	for key, values := range r.PostForm {
-		if strings.HasPrefix(key, "confirm_") && len(values) > 0 && values[0] == "yes" {
-			studentID := strings.TrimPrefix(key, "confirm_")
-			_, err = parentDocRef.Update(context.Background(), []firestore.Update{
-				{
-					Path:  "associated_students",
-					Value: firestore.ArrayUnion(studentID),
-				},
-			})
-			if err != nil {
-				http.Error(w, fmt.Sprintf("Failed to link student ID %s: %v", studentID, err), http.StatusInternalServerError)
-				return
-			}
-		}
+	// Update the parent's associated_students field
+	_, err = parentDocRef.Update(context.Background(), []firestore.Update{
+		{
+			Path:  "associated_students",
+			Value: firestore.ArrayUnion(confirmedStudentIDsInterface...),
+		},
+	})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to link students: %v", err), http.StatusInternalServerError)
+		return
 	}
 
-	// Redirect to the parent dashboard after linking
-	http.Redirect(w, r, "/parentdashboard", http.StatusSeeOther)
+	// Return a success response
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"message":"Students linked successfully"}`))
 }

@@ -4,22 +4,21 @@ package parent
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"log"
 	"net/http"
-	"strconv"
-	"text/template"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 type StudentInfo struct {
-	StudentID   string
-	StudentName string
-	CanLink     bool
+	StudentID   string `json:"studentId"`
+	StudentName string `json:"studentName"`
+	CanLink     bool   `json:"canLink"`
 }
 
+// StudentIntakeHandler handles the submission of student IDs
 func (a *App) StudentIntakeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
@@ -40,17 +39,18 @@ func (a *App) StudentIntakeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse the form data
-	err = r.ParseForm()
+	// Parse the JSON request body
+	var requestData struct {
+		StudentIDs []string `json:"studentIds"`
+	}
+	err = json.NewDecoder(r.Body).Decode(&requestData)
 	if err != nil {
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		http.Error(w, "Failed to parse JSON request body", http.StatusBadRequest)
 		return
 	}
 
-	numStudentsStr := r.FormValue("numStudents")
-	numStudents, err := strconv.Atoi(numStudentsStr)
-	if err != nil {
-		http.Error(w, "Invalid number of students", http.StatusBadRequest)
+	if len(requestData.StudentIDs) == 0 {
+		http.Error(w, "No student IDs provided", http.StatusBadRequest)
 		return
 	}
 
@@ -59,11 +59,9 @@ func (a *App) StudentIntakeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Prepare to store student names or errors
 	var studentInfos []StudentInfo
-	var studentNotFound bool
 
 	// Loop through the student IDs and fetch names from Firestore
-	for i := 1; i <= numStudents; i++ {
-		studentID := r.FormValue(fmt.Sprintf("studentId%d", i))
+	for _, studentID := range requestData.StudentIDs {
 		if studentID == "" {
 			continue
 		}
@@ -79,11 +77,10 @@ func (a *App) StudentIntakeHandler(w http.ResponseWriter, r *http.Request) {
 					StudentName: "Not found",
 					CanLink:     false, // Flag that this student cannot be linked
 				})
-				studentNotFound = true
 				continue
 			} else {
 				log.Printf("Error retrieving student ID %s: %v", studentID, err)
-				http.Error(w, fmt.Sprintf("Failed to retrieve student ID %s: %v", studentID, err), http.StatusInternalServerError)
+				http.Error(w, "Failed to retrieve student data", http.StatusInternalServerError)
 				return
 			}
 		}
@@ -118,58 +115,15 @@ func (a *App) StudentIntakeHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Render the student confirmation page
-	tmpl := `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Confirm Students</title>
-</head>
-<body>
-	<h1>Confirm Students</h1>
-	<form action="/confirmLinkStudents" method="POST">
-		{{range .StudentInfos}}
-			<div>
-				{{if .CanLink}}
-					<p>Is {{.StudentName}} (ID: {{.StudentID}}) your child?</p>
-					<select name="confirm_{{.StudentID}}">
-						<option value="yes">Yes</option>
-						<option value="no">No</option>
-					</select>
-				{{else}}
-					<p>{{.StudentName}} (ID: {{.StudentID}}) was not found. Please re-enter the correct ID.</p>
-				{{end}}
-			</div>
-		{{end}}
-		{{if .StudentNotFound}}
-			<p>One or more students were not found. Please correct the IDs and try again.</p>
-			<button type="button" onclick="location.href='/parentintake';">Re-enter Student IDs</button>
-		{{else}}
-			<button type="submit">Link Student</button>
-		{{end}}
-	</form>
-</body>
-</html>
-`
-
-	// Render the template with the student information
-	t, err := template.New("confirm").Parse(tmpl)
-	if err != nil {
-		http.Error(w, "Failed to parse template", http.StatusInternalServerError)
-		return
-	}
-
-	err = t.Execute(w, struct {
-		StudentInfos    []StudentInfo
-		StudentNotFound bool
+	// Return the student information as JSON
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(struct {
+		StudentInfos []StudentInfo `json:"studentInfos"`
 	}{
-		StudentInfos:    studentInfos,
-		StudentNotFound: studentNotFound,
+		StudentInfos: studentInfos,
 	})
 	if err != nil {
-		http.Error(w, "Failed to execute template", http.StatusInternalServerError)
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
 }
