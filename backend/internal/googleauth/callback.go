@@ -4,6 +4,7 @@ package googleauth
 
 import (
 	"context"
+	"log"
 	"net/http"
 
 	"cloud.google.com/go/firestore"
@@ -14,10 +15,15 @@ import (
 
 func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
+	if code == "" {
+		http.Error(w, "Code not found in the request", http.StatusBadRequest)
+		return
+	}
 
 	// Exchange the authorization code for a token
 	token, err := a.OAuthConfig.Exchange(context.Background(), code)
 	if err != nil {
+		log.Printf("Failed to exchange code for token: %v", err)
 		http.Error(w, "Failed to exchange authorization code for token", http.StatusBadRequest)
 		return
 	}
@@ -31,6 +37,7 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	payload, err := idtoken.Validate(context.Background(), idTokenStr, a.Config.GOOGLE_CLIENT_ID)
 	if err != nil {
+		log.Printf("Failed to validate ID token: %v", err)
 		http.Error(w, "Failed to validate ID token", http.StatusInternalServerError)
 		return
 	}
@@ -50,6 +57,7 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	// Store userID and email in session
 	session, err := a.Store.Get(r, "session-name")
 	if err != nil {
+		log.Printf("Failed to get session: %v", err)
 		http.Error(w, "Failed to get session", http.StatusInternalServerError)
 		return
 	}
@@ -59,14 +67,15 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	// Save the session
 	err = session.Save(r, w)
 	if err != nil {
+		log.Printf("Failed to save session: %v", err)
 		http.Error(w, "Failed to save session", http.StatusInternalServerError)
 		return
 	}
-
+	log.Printf("Session saved: user_id=%s, user_email=%s", userID, email)
 	// Use the existing Firestore client from App
 	firestoreClient := a.FirestoreClient
 
-	// Check if the user already exists in Firestore
+	// Reference to the parent's document
 	docRef := firestoreClient.Collection("parents").Doc(userID)
 	doc, err := docRef.Get(context.Background())
 
@@ -77,7 +86,7 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 				"user_id":             userID,
 				"email":               email,
 				"access_token":        token.AccessToken,
-				"refresh_token":       token.RefreshToken,
+				"refresh_token":       token.RefreshToken, // Store refresh_token
 				"expiry":              token.Expiry,
 				"associated_students": []interface{}{},
 			})
@@ -99,7 +108,7 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 			updates = append(updates, firestore.Update{Path: "access_token", Value: token.AccessToken})
 			needsUpdate = true
 		}
-		if data["refresh_token"] != token.RefreshToken {
+		if data["refresh_token"] != token.RefreshToken && token.RefreshToken != "" {
 			updates = append(updates, firestore.Update{Path: "refresh_token", Value: token.RefreshToken})
 			needsUpdate = true
 		}
@@ -116,7 +125,10 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	log.Printf("OAuthCallbackHandler: Received code=%s", code)
+	log.Printf("OAuthCallbackHandler: User authenticated: %s (%s)", userID, email)
+	log.Printf("OAuthCallbackHandler: Redirecting to dashboard")
 
 	// Redirect to the React app's dashboard route
-	http.Redirect(w, r, "http://localhost:3000/parentdashboard", http.StatusSeeOther)
+	http.Redirect(w, r, "https://lee-tutoring-webapp.web.app/parentdashboard", http.StatusSeeOther)
 }

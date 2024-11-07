@@ -180,6 +180,6 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Redirect to the parent dashboard (automatic association will occur there)
-	http.Redirect(w, r, "/parentdashboard", http.StatusSeeOther)
+	http.Redirect(w, r, "https://lee-tutoring-webapp.web.app/parentdashboard", http.StatusSeeOther)
+
 }

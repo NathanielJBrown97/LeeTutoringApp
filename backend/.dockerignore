@@ -1,0 +1,17 @@
+# .dockerignore
+
+# Exclude git repository files
+.git
+.gitignore
+
+# Exclude node_modules if present (common in projects with frontend components)
+node_modules/
+
+# Exclude the frontend directory if it's not needed in the backend build
+frontend/
+
+# Exclude the service account JSON file (should be handled via environment variables or secrets)
+serviceAccount.json
+
+# Exclude any environment files
+.env

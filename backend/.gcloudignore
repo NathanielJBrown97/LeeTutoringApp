@@ -1,0 +1,23 @@
+# .gcloudignore
+
+# This file specifies files and directories that are *not* uploaded to Google Cloud Platform
+# using gcloud. It follows the same syntax as .gitignore files.
+
+# Exclude the .gcloudignore file itself
+.gcloudignore
+
+# Exclude git repository files
+.git
+.gitignore
+
+# Exclude node_modules
+node_modules/
+
+# Exclude the frontend directory
+frontend/
+
+# Exclude the service account JSON file
+serviceAccount.json
+
+# Exclude environment files
+.env

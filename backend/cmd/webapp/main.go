@@ -5,12 +5,15 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
+	"github.com/NathanielJBrown97/LeeTutoringApp/internal/auth"
 	"github.com/NathanielJBrown97/LeeTutoringApp/internal/config"
 	"github.com/NathanielJBrown97/LeeTutoringApp/internal/dashboard"
 	googleauth "github.com/NathanielJBrown97/LeeTutoringApp/internal/googleauth"
 	microsoftauth "github.com/NathanielJBrown97/LeeTutoringApp/internal/microsoftauth"
 	parentpkg "github.com/NathanielJBrown97/LeeTutoringApp/internal/parent"
+	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	"github.com/rs/cors"
 	"golang.org/x/oauth2"
@@ -37,20 +40,21 @@ func main() {
 	// Set session options
 	store.Options = &sessions.Options{
 		Path:     "/",
-		MaxAge:   86400 * 7, // 7 days
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode, // Adjust as needed
-		// Secure:   true, // Uncomment when using HTTPS
+		MaxAge:   86400 * 7,             // 7 days
+		HttpOnly: true,                  // Prevents JavaScript access to cookies
+		SameSite: http.SameSiteNoneMode, // Allows cross-site cookies
+		Secure:   true,                  // Ensures cookies are only sent over HTTPS
 	}
 
-	// Google OAuth2 configuration
+	// Google OAuth2 configuration with AccessTypeOffline and PromptConsent
 	googleConf := &oauth2.Config{
 		ClientID:     cfg.GOOGLE_CLIENT_ID,
 		ClientSecret: cfg.GOOGLE_CLIENT_SECRET,
-		RedirectURL:  cfg.GOOGLE_REDIRECT_URL,
+		RedirectURL:  cfg.GOOGLE_REDIRECT_URL, // Should be set to your backend's callback URL
 		Scopes:       []string{"email", "profile"},
 		Endpoint:     google.Endpoint,
 	}
+
 	googleApp := googleauth.App{
 		Config:          cfg,
 		OAuthConfig:     googleConf,
@@ -62,10 +66,11 @@ func main() {
 	microsoftConf := &oauth2.Config{
 		ClientID:     cfg.MICROSOFT_CLIENT_ID,
 		ClientSecret: cfg.MICROSOFT_CLIENT_SECRET,
-		RedirectURL:  cfg.MICROSOFT_REDIRECT_URL,
+		RedirectURL:  cfg.MICROSOFT_REDIRECT_URL, // Should be set to your backend's callback URL
 		Scopes:       []string{"openid", "profile", "email", "offline_access"},
 		Endpoint:     microsoft.AzureADEndpoint("common"), // Use "common" to support all account types
 	}
+
 	microsoftApp := microsoftauth.App{
 		Config:          cfg,
 		OAuthConfig:     microsoftConf,
@@ -87,37 +92,50 @@ func main() {
 		Store:           store,
 	}
 
-	// Set up the HTTP server and routes
-	mux := http.NewServeMux()
+	// Initialize auth App
+	authApp := auth.App{
+		Config:          cfg,
+		Store:           store,
+		FirestoreClient: firestoreClient,
+	}
+
+	// Set up the HTTP server and routes using gorilla/mux
+	r := mux.NewRouter()
 
 	// API routes
-	mux.HandleFunc("/api/dashboard", dashboardApp.Handler)
-	mux.HandleFunc("/api/submitStudentIDs", parentApp.StudentIntakeHandler)
-	mux.HandleFunc("/api/confirmLinkStudents", parentApp.ConfirmLinkStudentsHandler)
+	r.HandleFunc("/api/dashboard", dashboardApp.Handler).Methods("GET")
+	r.HandleFunc("/api/submitStudentIDs", parentApp.StudentIntakeHandler).Methods("POST")
+	r.HandleFunc("/api/confirmLinkStudents", parentApp.ConfirmLinkStudentsHandler).Methods("POST")
+	r.HandleFunc("/api/auth/status", authApp.StatusHandler).Methods("GET") // Auth Status Endpoint
+
+	// New endpoints for accessing student data
+	r.HandleFunc("/api/students", dashboardApp.StudentsHandler).Methods("GET")
+	r.HandleFunc("/api/students/{student_id}", dashboardApp.StudentDetailHandler).Methods("GET")
 
 	// OAuth handlers
-	mux.HandleFunc("/internal/googleauth/oauth", googleApp.OAuthHandler)
-	mux.HandleFunc("/internal/googleauth/callback", googleApp.OAuthCallbackHandler)
-	mux.HandleFunc("/internal/microsoftauth/oauth", microsoftApp.OAuthHandler)
-	mux.HandleFunc("/internal/microsoftauth/callback", microsoftApp.OAuthCallbackHandler)
-
-	// Optionally serve static files (in production)
-	// Commented out during development
-	// fs := http.FileServer(http.Dir("./frontend/build"))
-	// mux.Handle("/", fs)
+	r.HandleFunc("/internal/googleauth/oauth", googleApp.OAuthHandler).Methods("GET")
+	r.HandleFunc("/internal/googleauth/callback", googleApp.OAuthCallbackHandler).Methods("GET")
+	r.HandleFunc("/internal/microsoftauth/oauth", microsoftApp.OAuthHandler).Methods("GET")
+	r.HandleFunc("/internal/microsoftauth/callback", microsoftApp.OAuthCallbackHandler).Methods("GET")
 
 	// Use CORS middleware
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000"},
+		AllowedOrigins:   []string{"https://lee-tutoring-webapp.web.app"}, // Your frontend domain
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
 	})
-	handler := c.Handler(mux)
+	handler := c.Handler(r)
+
+	// Get the port from the environment variable PORT (GCP uses this)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
 
 	// Start the HTTP server
-	log.Printf("Server started on http://localhost:%s", cfg.PORT)
-	err = http.ListenAndServe(":"+cfg.PORT, handler)
+	log.Printf("Server started on port %s", port)
+	err = http.ListenAndServe(":"+port, handler)
 	if err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}

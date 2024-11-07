@@ -77,6 +77,32 @@ func (a *App) checkAndAssociateStudents(parentDocumentID string, parentEmail str
 	return nil
 }
 
+// isStudentAssociatedWithParent checks if the student is associated with the parent
+func (a *App) isStudentAssociatedWithParent(ctx context.Context, parentDocumentID string, studentID string) (bool, error) {
+	// Fetch the parent document
+	parentDoc, err := a.FirestoreClient.Collection("parents").Doc(parentDocumentID).Get(ctx)
+	if err != nil {
+		log.Printf("Error fetching parent document: %v", err)
+		return false, err
+	}
+
+	// Extract associated_students array
+	associatedStudentsInterface, ok := parentDoc.Data()["associated_students"].([]interface{})
+	if !ok || len(associatedStudentsInterface) == 0 {
+		log.Println("No associated students found for parent")
+		return false, nil
+	}
+
+	for _, s := range associatedStudentsInterface {
+		sID, ok := s.(string)
+		if ok && sID == studentID {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 // fetchStudentData fetches the student data based on the parent document ID and the selected student ID.
 func (a *App) fetchStudentData(parentDocumentID string, selectedStudentID string) (*DashboardData, error) {
 	ctx := context.Background()
@@ -128,7 +154,7 @@ func (a *App) fetchStudentData(parentDocumentID string, selectedStudentID string
 		}
 
 		name, nameOk := personalData["name"].(string)
-		remainingHoursVal, hoursOk := businessData["remaining_hours"].(int64)
+		remainingHoursVal, hoursOk := businessData["remaining_hours"].(float64)
 		lead, leadOk := businessData["team_lead"].(string)
 
 		tutorsInterface, tutorsOk := businessData["associated_tutors"].([]interface{})
@@ -142,27 +168,24 @@ func (a *App) fetchStudentData(parentDocumentID string, selectedStudentID string
 		}
 
 		// Fetch the most recent ACT scores
-		actDoc, err := studentDoc.Ref.Collection("tests").Doc("most_recent_act").Get(ctx)
+		// For simplicity, we can fetch recent test scores from 'Test Data' subcollection
+		testDataDocs, err := studentDoc.Ref.Collection("Test Data").Documents(ctx).GetAll()
 		if err == nil {
-			scoresInterface, ok := actDoc.Data()["most_recent_act"].([]interface{})
-			if ok {
-				actScores = []int64{}
-				for _, score := range scoresInterface {
-					switch v := score.(type) {
-					case int64:
-						actScores = append(actScores, v)
-					case float64:
-						actScores = append(actScores, int64(v))
+			for _, doc := range testDataDocs {
+				data := doc.Data()
+				if actData, ok := data["ACT"].(map[string]interface{}); ok {
+					if totalScore, ok := actData["Total"].(float64); ok {
+						actScores = append(actScores, int64(totalScore))
 					}
 				}
 			}
 		} else {
-			log.Printf("Error fetching most recent ACT scores for student ID %s: %v", studentID, err)
+			log.Printf("Error fetching Test Data for student ID %s: %v", studentID, err)
 		}
 
 		if selectedStudentID == "" || selectedStudentID == studentID {
 			if !nameOk || !hoursOk || !leadOk {
-				log.Printf("Error: Expected 'name' as string, 'remaining_hours' as int64, and 'team_lead' as string. Got Name OK: %v, Hours OK: %v, Lead OK: %v", nameOk, hoursOk, leadOk)
+				log.Printf("Error: Expected 'name' as string, 'remaining_hours' as float64, and 'team_lead' as string. Got Name OK: %v, Hours OK: %v, Lead OK: %v", nameOk, hoursOk, leadOk)
 				return nil, errors.New("unable to retrieve student data")
 			}
 			studentName = name

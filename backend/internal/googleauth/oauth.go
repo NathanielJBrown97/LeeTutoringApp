@@ -13,8 +13,8 @@ func (a *App) OAuthHandler(w http.ResponseWriter, r *http.Request) {
 	// Log that the OAuthHandler was triggered
 	log.Println("OAuthHandler triggered")
 
-	// Generate the OAuth URL for Google
-	url := a.OAuthConfig.AuthCodeURL("state", oauth2.AccessTypeOffline)
+	// Generate the OAuth URL for Google with prompt=consent to ensure refresh_token is received
+	url := a.OAuthConfig.AuthCodeURL("state", oauth2.AccessTypeOffline, oauth2.SetAuthURLParam("prompt", "consent"))
 
 	// Log the generated URL
 	log.Println("Redirecting to:", url)

@@ -6,3 +6,6 @@
 # Service account credentials
 serviceAccount.json
 gcloudCredentials.json
+
+key.pem
+cert.pem
