@@ -1,10 +1,5 @@
-/* src/App.css */
-
 .App {
   text-align: center;
-  font-family: 'Georgia', serif;
-  background-color: #001f3f; /* Navy Blue background */
-  color: #FFD700; /* Gold text color */
 }
 
 .App-logo {
@@ -19,21 +14,18 @@
 }
 
 .App-header {
-  background-color: #001f3f; /* Navy Blue background */
+  background-color: #282c34;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: calc(12px + 2vmin);
-  color: #FFD700; /* Gold text color */
-  background-image: url('/images/greek-columns-background.jpg');
-  background-size: cover;
-  background-position: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
 }
 
 .App-link {
-  color: #FFD700; /* Gold link color */
+  color: #61dafb;
 }
 
 @keyframes App-logo-spin {
@@ -43,71 +35,4 @@
   to {
     transform: rotate(360deg);
   }
-}
-
-/* Additional styling for the Greek theme */
-
-h1, h2, h3, h4, h5, h6 {
-  font-family: 'Times New Roman', Times, serif;
-  color: #FFD700; /* Gold text color */
-  margin: 0.5em 0;
-}
-
-button {
-  background-color: #FFD700; /* Gold button background */
-  color: #001f3f; /* Navy text color */
-  border: 2px solid #FFD700;
-  border-radius: 5px;
-  padding: 10px 20px;
-  margin: 10px;
-  font-size: 1em;
-  cursor: pointer;
-  font-family: 'Georgia', serif;
-}
-
-button:hover {
-  background-color: #e6b800; /* Slightly darker gold on hover */
-}
-
-input[type="text"], input[type="password"], input[type="email"] {
-  padding: 10px;
-  margin: 10px;
-  border: 2px solid #FFD700;
-  border-radius: 5px;
-  background-color: #fff;
-  color: #001f3f;
-  font-family: 'Georgia', serif;
-}
-
-form {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.container {
-  margin: 2em;
-}
-
-.error {
-  color: red;
-}
-
-ul {
-  list-style-type: none;
-  padding: 0;
-}
-
-li {
-  margin: 5px 0;
-  font-size: 1.1em;
-}
-
-a {
-  color: #FFD700;
-  text-decoration: none;
-}
-
-a:hover {
-  text-decoration: underline;
 }

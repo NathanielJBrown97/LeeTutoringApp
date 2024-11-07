@@ -1,0 +1,26 @@
+/* src/components/ParentDashboard.css */
+
+.dashboard-container {
+    padding: 20px;
+    font-family: Arial, sans-serif;
+  }
+  
+  .signout-button {
+    background-color: #ff4d4d;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    cursor: pointer;
+    margin-bottom: 20px;
+    border-radius: 5px;
+  }
+  
+  .signout-button:hover {
+    background-color: #ff1a1a;
+  }
+  
+  .welcome-section {
+    margin-bottom: 20px;
+    font-size: 18px;
+  }
+  

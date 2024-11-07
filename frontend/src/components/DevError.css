@@ -1,0 +1,37 @@
+/* src/components/DevError.css */
+
+.deverror-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 50px;
+    font-family: Arial, sans-serif;
+    text-align: center;
+  }
+  
+  .error-details {
+    background-color: #ffe6e6;
+    border: 1px solid #ffcccc;
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 5px;
+    width: 60%;
+  }
+  
+  .error-details h2 {
+    margin-bottom: 10px;
+    color: #cc0000;
+  }
+  
+  .retry-link {
+    background-color: #0078d4;
+    color: white;
+    padding: 10px 20px;
+    text-decoration: none;
+    border-radius: 5px;
+  }
+  
+  .retry-link:hover {
+    background-color: #005a9e;
+  }
+  
