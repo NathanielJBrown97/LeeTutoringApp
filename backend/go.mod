@@ -47,6 +47,7 @@ require (
 
 require (
 	github.com/coreos/go-oidc v2.2.1+incompatible
+	github.com/golang-jwt/jwt/v4 v4.5.1
 	github.com/gorilla/mux v1.8.1
 	github.com/rs/cors v1.11.1
 	golang.org/x/oauth2 v0.23.0

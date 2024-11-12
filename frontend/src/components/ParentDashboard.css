@@ -24,3 +24,31 @@
     font-size: 18px;
   }
   
+  .test-date-entry {
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+  .test-date-entry h3 {
+    margin-top: 0;
+  }
+
+  .goal-entry {
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+  
+  .goal-entry h3 {
+    margin-top: 0;
+  }
+  
+  .test-data-entry {
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+  
+  .test-data-entry h3 {
+    margin-top: 0;
+  }

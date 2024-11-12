@@ -12,9 +12,9 @@ import (
 	"github.com/NathanielJBrown97/LeeTutoringApp/internal/dashboard"
 	googleauth "github.com/NathanielJBrown97/LeeTutoringApp/internal/googleauth"
 	microsoftauth "github.com/NathanielJBrown97/LeeTutoringApp/internal/microsoftauth"
+	"github.com/NathanielJBrown97/LeeTutoringApp/internal/middleware"
 	parentpkg "github.com/NathanielJBrown97/LeeTutoringApp/internal/parent"
 	"github.com/gorilla/mux"
-	"github.com/gorilla/sessions"
 	"github.com/rs/cors"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -35,22 +35,14 @@ func main() {
 	}
 	defer firestoreClient.Close()
 
-	// Initialize session store with secret from config
-	store := sessions.NewCookieStore([]byte(cfg.SESSION_SECRET))
-	// Set session options
-	store.Options = &sessions.Options{
-		Path:     "/",
-		MaxAge:   86400 * 7,             // 7 days
-		HttpOnly: true,                  // Prevents JavaScript access to cookies
-		SameSite: http.SameSiteNoneMode, // Allows cross-site cookies
-		Secure:   true,                  // Ensures cookies are only sent over HTTPS
-	}
+	// Secret key for JWT
+	secretKey := cfg.SESSION_SECRET
 
-	// Google OAuth2 configuration with AccessTypeOffline and PromptConsent
+	// Google OAuth2 configuration
 	googleConf := &oauth2.Config{
 		ClientID:     cfg.GOOGLE_CLIENT_ID,
 		ClientSecret: cfg.GOOGLE_CLIENT_SECRET,
-		RedirectURL:  cfg.GOOGLE_REDIRECT_URL, // Should be set to your backend's callback URL
+		RedirectURL:  cfg.GOOGLE_REDIRECT_URL,
 		Scopes:       []string{"email", "profile"},
 		Endpoint:     google.Endpoint,
 	}
@@ -59,58 +51,90 @@ func main() {
 		Config:          cfg,
 		OAuthConfig:     googleConf,
 		FirestoreClient: firestoreClient,
-		Store:           store,
+		SecretKey:       secretKey,
 	}
 
 	// Microsoft OAuth2 configuration
 	microsoftConf := &oauth2.Config{
 		ClientID:     cfg.MICROSOFT_CLIENT_ID,
 		ClientSecret: cfg.MICROSOFT_CLIENT_SECRET,
-		RedirectURL:  cfg.MICROSOFT_REDIRECT_URL, // Should be set to your backend's callback URL
+		RedirectURL:  cfg.MICROSOFT_REDIRECT_URL,
 		Scopes:       []string{"openid", "profile", "email", "offline_access"},
-		Endpoint:     microsoft.AzureADEndpoint("common"), // Use "common" to support all account types
+		Endpoint:     microsoft.AzureADEndpoint("common"),
 	}
 
 	microsoftApp := microsoftauth.App{
 		Config:          cfg,
 		OAuthConfig:     microsoftConf,
 		FirestoreClient: firestoreClient,
-		Store:           store,
 	}
 
 	// Initialize parent App
 	parentApp := parentpkg.App{
 		Config:          cfg,
 		FirestoreClient: firestoreClient,
-		Store:           store,
 	}
 
 	// Initialize dashboard App
 	dashboardApp := dashboard.App{
 		Config:          cfg,
 		FirestoreClient: firestoreClient,
-		Store:           store,
 	}
 
 	// Initialize auth App
 	authApp := auth.App{
 		Config:          cfg,
-		Store:           store,
 		FirestoreClient: firestoreClient,
 	}
 
 	// Set up the HTTP server and routes using gorilla/mux
 	r := mux.NewRouter()
 
-	// API routes
-	r.HandleFunc("/api/dashboard", dashboardApp.Handler).Methods("GET")
-	r.HandleFunc("/api/submitStudentIDs", parentApp.StudentIntakeHandler).Methods("POST")
-	r.HandleFunc("/api/confirmLinkStudents", parentApp.ConfirmLinkStudentsHandler).Methods("POST")
-	r.HandleFunc("/api/auth/status", authApp.StatusHandler).Methods("GET") // Auth Status Endpoint
+	// Use the AuthMiddleware for protected routes
+	authMiddleware := middleware.AuthMiddleware(secretKey)
 
-	// New endpoints for accessing student data
-	r.HandleFunc("/api/students", dashboardApp.StudentsHandler).Methods("GET")
-	r.HandleFunc("/api/students/{student_id}", dashboardApp.StudentDetailHandler).Methods("GET")
+	// API routes
+
+	// Dashboard route with OPTIONS handling
+	r.HandleFunc("/api/dashboard", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.Header().Set("Access-Control-Allow-Origin", "https://lee-tutoring-webapp.web.app")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(dashboardApp.Handler)).ServeHTTP(w, r)
+	}).Methods("GET", "OPTIONS")
+
+	// Associated students route with OPTIONS handling
+	r.HandleFunc("/api/associated-students", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.Header().Set("Access-Control-Allow-Origin", "https://lee-tutoring-webapp.web.app")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(dashboardApp.AssociatedStudentsHandler)).ServeHTTP(w, r)
+	}).Methods("GET", "OPTIONS")
+
+	// Student detail route with OPTIONS handling
+	r.HandleFunc("/api/students/{student_id}", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.Header().Set("Access-Control-Allow-Origin", "https://lee-tutoring-webapp.web.app")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(dashboardApp.StudentDetailHandler)).ServeHTTP(w, r)
+	}).Methods("GET", "OPTIONS")
+
+	// Parent routes
+	r.Handle("/api/submitStudentIDs", authMiddleware(http.HandlerFunc(parentApp.StudentIntakeHandler))).Methods("POST", "OPTIONS")
+	r.Handle("/api/confirmLinkStudents", authMiddleware(http.HandlerFunc(parentApp.ConfirmLinkStudentsHandler))).Methods("POST", "OPTIONS")
+	r.Handle("/api/auth/status", authMiddleware(http.HandlerFunc(authApp.StatusHandler))).Methods("GET", "OPTIONS")
 
 	// OAuth handlers
 	r.HandleFunc("/internal/googleauth/oauth", googleApp.OAuthHandler).Methods("GET")
@@ -120,10 +144,11 @@ func main() {
 
 	// Use CORS middleware
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"https://lee-tutoring-webapp.web.app"}, // Your frontend domain
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE"},
+		AllowedOrigins:   []string{"https://lee-tutoring-webapp.web.app"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
+		Debug:            true, // Enable debug mode to log CORS issues
 	})
 	handler := c.Handler(r)
 

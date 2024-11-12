@@ -1,6 +1,6 @@
 // src/App.js
 
-import React, { useContext } from 'react';
+import React, { useContext, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, AuthContext } from './contexts/AuthContext';
 import SignIn from './components/SignIn';
@@ -11,37 +11,34 @@ import AuthRedirect from './components/AuthRedirect';
 function AppRoutes() {
   const authState = useContext(AuthContext);
 
+  useEffect(() => {
+    console.log('AuthState in AppRoutes:', authState);
+  }, [authState]);
+
   if (authState.loading) {
     return <div>Loading...</div>;
   }
 
-  if (authState.authenticated) {
-    return (
-      <Routes>
-        <Route path="/parentdashboard" element={<ParentDashboard />} />
-        <Route path="/" element={<Navigate to="/parentdashboard" />} />
-        <Route path="*" element={<Navigate to="/parentdashboard" />} />
-      </Routes>
-    );
-  }
-
-  if (authState.error) {
-    return (
-      <Routes>
-        <Route path="/deverror" element={<DevError />} />
-        <Route path="/" element={<SignIn />} />
-        <Route path="*" element={<Navigate to="/deverror" />} />
-      </Routes>
-    );
-  }
-
   return (
     <Routes>
-      <Route path="/" element={<SignIn />} />
-      <Route path="/parentdashboard" element={<Navigate to="/" />} />
-      <Route path="/deverror" element={<DevError />} />
-      <Route path="/auth-redirect" element={<AuthRedirect />} />
-      <Route path="*" element={<Navigate to="/" />} />
+      {/* Public Routes */}
+      {!authState.authenticated && (
+        <>
+          <Route path="/" element={<SignIn />} />
+          <Route path="/auth-redirect" element={<AuthRedirect />} />
+          {/* Redirect any other routes to sign-in */}
+          <Route path="*" element={<Navigate to="/" />} />
+        </>
+      )}
+
+      {/* Protected Routes */}
+      {authState.authenticated && (
+        <>
+          <Route path="/parentdashboard" element={<ParentDashboard />} />
+          {/* Redirect any other routes to dashboard */}
+          <Route path="*" element={<Navigate to="/parentdashboard" />} />
+        </>
+      )}
     </Routes>
   );
 }

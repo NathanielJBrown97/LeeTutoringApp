@@ -4,10 +4,13 @@ package googleauth
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"cloud.google.com/go/firestore"
+	"github.com/golang-jwt/jwt/v4"
 	"google.golang.org/api/idtoken"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -54,24 +57,23 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store userID and email in session
-	session, err := a.Store.Get(r, "session-name")
-	if err != nil {
-		log.Printf("Failed to get session: %v", err)
-		http.Error(w, "Failed to get session", http.StatusInternalServerError)
-		return
+	// Generate a JWT token without associated_students
+	tokenClaims := jwt.MapClaims{
+		"user_id": userID,
+		"email":   email,
+		"exp":     time.Now().Add(7 * 24 * time.Hour).Unix(), // Token expires in 7 days
 	}
-	session.Values["user_id"] = userID
-	session.Values["user_email"] = email // Store the email in the session
 
-	// Save the session
-	err = session.Save(r, w)
+	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, tokenClaims)
+
+	// Use the secret key
+	signedToken, err := jwtToken.SignedString([]byte(a.SecretKey))
 	if err != nil {
-		log.Printf("Failed to save session: %v", err)
-		http.Error(w, "Failed to save session", http.StatusInternalServerError)
+		log.Printf("Failed to sign JWT token: %v", err)
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
-	log.Printf("Session saved: user_id=%s, user_email=%s", userID, email)
+
 	// Use the existing Firestore client from App
 	firestoreClient := a.FirestoreClient
 
@@ -86,7 +88,7 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 				"user_id":             userID,
 				"email":               email,
 				"access_token":        token.AccessToken,
-				"refresh_token":       token.RefreshToken, // Store refresh_token
+				"refresh_token":       token.RefreshToken,
 				"expiry":              token.Expiry,
 				"associated_students": []interface{}{},
 			})
@@ -125,10 +127,12 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
 	log.Printf("OAuthCallbackHandler: Received code=%s", code)
 	log.Printf("OAuthCallbackHandler: User authenticated: %s (%s)", userID, email)
 	log.Printf("OAuthCallbackHandler: Redirecting to dashboard")
 
-	// Redirect to the React app's dashboard route
-	http.Redirect(w, r, "https://lee-tutoring-webapp.web.app/parentdashboard", http.StatusSeeOther)
+	// Redirect to the React app's dashboard route with the token in the URL fragment
+	redirectURL := fmt.Sprintf("%s/auth-redirect#%s", "https://lee-tutoring-webapp.web.app", signedToken)
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }

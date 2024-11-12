@@ -7,5 +7,7 @@
 serviceAccount.json
 gcloudCredentials.json
 
+/cmd/webapp/key.pem
+/cmd/webapp/cert.pem
 key.pem
 cert.pem

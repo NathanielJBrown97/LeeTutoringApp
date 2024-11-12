@@ -24,10 +24,22 @@ type StudentDetailResponse struct {
 
 // StudentDetailHandler handles the GET /api/students/{student_id} endpoint
 func (a *App) StudentDetailHandler(w http.ResponseWriter, r *http.Request) {
-	// Retrieve the parent document ID from the session
-	parentDocumentID, _ := a.getParentCredentials(r)
-	if parentDocumentID == "" {
+	// Retrieve user ID from the JWT token
+	userID, _ := a.getParentCredentials(r)
+	if userID == "" {
 		http.Error(w, "Unable to identify parent user", http.StatusUnauthorized)
+		return
+	}
+
+	// Fetch associated_students from Firestore
+	associatedStudents, err := a.getAssociatedStudents(userID)
+	if err != nil {
+		log.Printf("Error fetching associated students: %v", err)
+		http.Error(w, "Unable to fetch associated students", http.StatusInternalServerError)
+		return
+	}
+	if len(associatedStudents) == 0 {
+		http.Error(w, "No associated students found", http.StatusUnauthorized)
 		return
 	}
 
@@ -39,19 +51,20 @@ func (a *App) StudentDetailHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := context.Background()
-
 	// Verify that the student is associated with the parent
-	isAssociated, err := a.isStudentAssociatedWithParent(ctx, parentDocumentID, studentID)
-	if err != nil {
-		log.Printf("Error checking student association: %v", err)
-		http.Error(w, "Error checking student association", http.StatusInternalServerError)
-		return
+	isAssociated := false
+	for _, sID := range associatedStudents {
+		if sID == studentID {
+			isAssociated = true
+			break
+		}
 	}
 	if !isAssociated {
 		http.Error(w, "Unauthorized access to student data", http.StatusUnauthorized)
 		return
 	}
+
+	ctx := context.Background()
 
 	// Fetch student data
 	studentDoc, err := a.FirestoreClient.Collection("students").Doc(studentID).Get(ctx)
@@ -65,16 +78,61 @@ func (a *App) StudentDetailHandler(w http.ResponseWriter, r *http.Request) {
 		ID: studentID,
 	}
 
-	// Fetch 'personal' subdocument
+	// Fetch 'personal' field and extract specific fields
 	if personalData, ok := studentDoc.Data()["personal"].(map[string]interface{}); ok {
-		studentData.Personal = personalData
+		personalResponse := make(map[string]interface{})
+
+		if name, ok := personalData["name"]; ok {
+			personalResponse["name"] = name
+		}
+		if accommodations, ok := personalData["accommodations"]; ok {
+			personalResponse["accommodations"] = accommodations
+		}
+		if grade, ok := personalData["grade"]; ok {
+			personalResponse["grade"] = grade
+		}
+		if highSchool, ok := personalData["high_school"]; ok {
+			personalResponse["high_school"] = highSchool
+		}
+		if parentEmail, ok := personalData["parent_email"]; ok {
+			personalResponse["parent_email"] = parentEmail
+		}
+		if studentEmail, ok := personalData["student_email"]; ok {
+			personalResponse["student_email"] = studentEmail
+		}
+
+		studentData.Personal = personalResponse
 	} else {
 		studentData.Personal = make(map[string]interface{})
 	}
 
-	// Fetch 'business' subdocument
+	// Fetch 'business' field and extract specific fields
 	if businessData, ok := studentDoc.Data()["business"].(map[string]interface{}); ok {
-		studentData.Business = businessData
+		businessResponse := make(map[string]interface{})
+
+		if lifetimeHours, ok := businessData["lifetime_hours"]; ok {
+			businessResponse["lifetime_hours"] = lifetimeHours
+		}
+		if registeredTests, ok := businessData["registered_tests"]; ok {
+			businessResponse["registered_tests"] = registeredTests
+		}
+		if remainingHours, ok := businessData["remaining_hours"]; ok {
+			businessResponse["remaining_hours"] = remainingHours
+		}
+		if status, ok := businessData["status"]; ok {
+			businessResponse["status"] = status
+		}
+		if teamLead, ok := businessData["team_lead"]; ok {
+			businessResponse["team_lead"] = teamLead
+		}
+		if testFocus, ok := businessData["test_focus"]; ok {
+			businessResponse["test_focus"] = testFocus
+		}
+		if associatedTutors, ok := businessData["associated_tutors"]; ok {
+			businessResponse["associated_tutors"] = associatedTutors
+		}
+
+		studentData.Business = businessResponse
 	} else {
 		studentData.Business = make(map[string]interface{})
 	}
@@ -88,8 +146,12 @@ func (a *App) StudentDetailHandler(w http.ResponseWriter, r *http.Request) {
 		var homeworkCompletion []map[string]interface{}
 		for _, doc := range homeworkCompletionDocs {
 			data := doc.Data()
-			data["id"] = doc.Ref.ID // Include document ID
-			homeworkCompletion = append(homeworkCompletion, data)
+			homeworkData := map[string]interface{}{
+				"id":         doc.Ref.ID,         // Document ID (date format)
+				"date":       data["date"],       // Date field
+				"percentage": data["percentage"], // Percentage field
+			}
+			homeworkCompletion = append(homeworkCompletion, homeworkData)
 		}
 		studentData.HomeworkCompletion = homeworkCompletion
 	}
@@ -105,7 +167,7 @@ func (a *App) StudentDetailHandler(w http.ResponseWriter, r *http.Request) {
 			data := doc.Data()
 			data["id"] = doc.Ref.ID // Include document ID
 
-			// Fetch 'ACT' and 'SAT' subdocuments if they exist within the document data
+			// Include 'ACT' and 'SAT' subdocuments if they exist within the document data
 			if actData, ok := data["ACT"].(map[string]interface{}); ok {
 				data["ACT"] = actData
 			}
