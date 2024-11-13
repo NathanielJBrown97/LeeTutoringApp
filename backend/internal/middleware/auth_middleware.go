@@ -62,8 +62,21 @@ func AuthMiddleware(secretKey string) func(http.Handler) http.Handler {
 	}
 }
 
-// Retrieve user info from context
+// Retrieve user info (claims) from context
 func GetUserFromContext(ctx context.Context) (jwt.MapClaims, bool) {
 	claims, ok := ctx.Value(userContextKey).(jwt.MapClaims)
 	return claims, ok
+}
+
+// ExtractUserIDFromContext extracts the user ID from the context
+func ExtractUserIDFromContext(ctx context.Context) (string, error) {
+	claims, ok := GetUserFromContext(ctx)
+	if !ok {
+		return "", http.ErrNoCookie // Or appropriate error
+	}
+	userID, ok := claims["user_id"].(string)
+	if !ok || userID == "" {
+		return "", http.ErrNoCookie
+	}
+	return userID, nil
 }

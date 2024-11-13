@@ -1,0 +1,53 @@
+/* src/components/StudentIntake.css */
+
+.student-intake-container {
+    max-width: 600px;
+    margin: 50px auto;
+    padding: 20px;
+    text-align: center;
+  }
+  
+  .intake-form label,
+  .confirmation-step label {
+    display: block;
+    margin-bottom: 10px;
+  }
+  
+  .intake-form input,
+  .confirmation-step input {
+    margin-left: 10px;
+  }
+  
+  button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    cursor: pointer;
+  }
+  
+  .confirmation-step ul {
+    list-style-type: none;
+    padding: 0;
+  }
+  
+  .confirmation-step li {
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+
+ .confirmation-step button {
+    margin: 5px;
+  }
+  
+  .confirmation-step p {
+    margin: 5px 0;
+  }
+  
+  .confirmation-step .confirmed {
+    color: green;
+  }
+  
+  .confirmation-step .not-confirmed {
+    color: orange;
+  }
+  

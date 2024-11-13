@@ -1,54 +1,180 @@
 /* src/components/ParentDashboard.css */
 
-.dashboard-container {
-    padding: 20px;
-    font-family: Arial, sans-serif;
-  }
-  
-  .signout-button {
-    background-color: #ff4d4d;
-    color: white;
-    border: none;
-    padding: 10px 15px;
-    cursor: pointer;
-    margin-bottom: 20px;
-    border-radius: 5px;
-  }
-  
-  .signout-button:hover {
-    background-color: #ff1a1a;
-  }
-  
-  .welcome-section {
-    margin-bottom: 20px;
-    font-size: 18px;
-  }
-  
-  .test-date-entry {
-    border: 1px solid #ccc;
-    padding: 10px;
-    margin-bottom: 10px;
-  }
-  .test-date-entry h3 {
-    margin-top: 0;
-  }
+body {
+  background-color: #f9f7f1; /* Cream whitish background */
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #333;
+  margin: 0;
+  padding: 0;
+}
 
-  .goal-entry {
-    border: 1px solid #ccc;
-    padding: 10px;
-    margin-bottom: 10px;
-  }
-  
-  .goal-entry h3 {
-    margin-top: 0;
-  }
-  
-  .test-data-entry {
-    border: 1px solid #ccc;
-    padding: 10px;
-    margin-bottom: 10px;
-  }
-  
-  .test-data-entry h3 {
-    margin-top: 0;
-  }
+.navbar {
+  background-color: #0a2342; /* Navy color */
+  color: #f9f7f1; /* Cream color for text */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+}
+
+.logo {
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.nav-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.nav-button {
+  background-color: #f9f7f1; /* Cream background */
+  color: #0a2342; /* Navy text */
+  border: none;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 5px;
+  font-weight: bold;
+}
+
+.nav-button:hover {
+  background-color: #e0dacf; /* Slightly darker cream */
+}
+
+.nav-button.signout {
+  background-color: #c92a2a; /* Red for sign out */
+  color: #fff;
+}
+
+.nav-button.signout:hover {
+  background-color: #a51111;
+}
+
+.content {
+  padding: 20px;
+}
+
+.student-selector {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.student-selector label {
+  font-weight: bold;
+}
+
+.student-selector select {
+  padding: 5px;
+  font-size: 16px;
+}
+
+.student-name {
+  font-size: 24px;
+  margin-bottom: 20px;
+  color: #0a2342; /* Navy color */
+}
+
+.tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.tab-button {
+  background-color: #e0dacf;
+  color: #0a2342;
+  border: none;
+  padding: 10px 15px;
+  cursor: pointer;
+  border-radius: 5px 5px 0 0;
+  font-weight: bold;
+}
+
+.tab-button.active {
+  background-color: #f9f7f1;
+  border-bottom: 2px solid #f9f7f1;
+}
+
+.tab-button:hover {
+  background-color: #f9f7f1;
+}
+
+.tab-content {
+  border: 2px solid #e0dacf;
+  padding: 20px;
+  background-color: #fff;
+  border-radius: 0 5px 5px 5px;
+}
+
+.info-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.info-table th,
+.info-table td {
+  border: 1px solid #e0dacf;
+  padding: 10px;
+  text-align: left;
+}
+
+.info-table th {
+  background-color: #e0dacf;
+  color: #0a2342;
+}
+
+.info-table tr:nth-child(even) {
+  background-color: #f9f7f1;
+}
+
+.loading {
+  font-size: 24px;
+  text-align: center;
+  margin-top: 50px;
+}
+
+.test-card {
+  border: 1px solid #e0dacf;
+  padding: 15px;
+  margin-bottom: 20px;
+  border-radius: 5px;
+  background-color: #fff;
+}
+
+.test-card h3 {
+  margin-top: 0;
+}
+
+.test-card h4 {
+  margin-bottom: 5px;
+}
+
+ul {
+  list-style-type: disc;
+  margin-left: 20px;
+}
+
+p {
+  margin: 5px 0;
+}
+
+a {
+  color: #0a2342;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* New styles for dividers */
+.test-date-divider td,
+.goal-divider td {
+  border-bottom: 2px solid #0a2342; /* Navy color for divider */
+  padding: 0;
+  margin: 0;
+  height: 10px;
+  background-color: transparent;
+}

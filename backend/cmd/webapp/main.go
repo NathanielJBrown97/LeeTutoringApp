@@ -98,7 +98,7 @@ func main() {
 	// Dashboard route with OPTIONS handling
 	r.HandleFunc("/api/dashboard", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
-			w.Header().Set("Access-Control-Allow-Origin", "https://lee-tutoring-webapp.web.app")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 			w.WriteHeader(http.StatusNoContent)
@@ -110,7 +110,7 @@ func main() {
 	// Associated students route with OPTIONS handling
 	r.HandleFunc("/api/associated-students", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
-			w.Header().Set("Access-Control-Allow-Origin", "https://lee-tutoring-webapp.web.app")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 			w.WriteHeader(http.StatusNoContent)
@@ -122,7 +122,7 @@ func main() {
 	// Student detail route with OPTIONS handling
 	r.HandleFunc("/api/students/{student_id}", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
-			w.Header().Set("Access-Control-Allow-Origin", "https://lee-tutoring-webapp.web.app")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 			w.WriteHeader(http.StatusNoContent)
@@ -132,8 +132,39 @@ func main() {
 	}).Methods("GET", "OPTIONS")
 
 	// Parent routes
-	r.Handle("/api/submitStudentIDs", authMiddleware(http.HandlerFunc(parentApp.StudentIntakeHandler))).Methods("POST", "OPTIONS")
-	r.Handle("/api/confirmLinkStudents", authMiddleware(http.HandlerFunc(parentApp.ConfirmLinkStudentsHandler))).Methods("POST", "OPTIONS")
+	r.HandleFunc("/api/submitStudentIDs", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(parentApp.StudentIntakeHandler)).ServeHTTP(w, r)
+	}).Methods("POST", "OPTIONS")
+
+	r.HandleFunc("/api/confirmLinkStudents", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(parentApp.ConfirmLinkStudentsHandler)).ServeHTTP(w, r)
+	}).Methods("POST", "OPTIONS")
+
+	r.HandleFunc("/api/attemptAutomaticAssociation", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(parentApp.AttemptAutomaticAssociation)).ServeHTTP(w, r)
+	}).Methods("POST", "OPTIONS")
+
 	r.Handle("/api/auth/status", authMiddleware(http.HandlerFunc(authApp.StatusHandler))).Methods("GET", "OPTIONS")
 
 	// OAuth handlers
@@ -144,7 +175,7 @@ func main() {
 
 	// Use CORS middleware
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"https://lee-tutoring-webapp.web.app"},
+		AllowedOrigins:   []string{"https://lee-tutoring-webapp.web.app", "http://localhost:3000"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,

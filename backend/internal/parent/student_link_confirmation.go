@@ -1,3 +1,5 @@
+// backend/internal/parent/student_link_confirmation.go
+
 package parent
 
 import (
@@ -7,6 +9,7 @@ import (
 	"net/http"
 
 	"cloud.google.com/go/firestore"
+	"github.com/NathanielJBrown97/LeeTutoringApp/internal/middleware"
 )
 
 func sliceStringsToInterfaces(slice []string) []interface{} {
@@ -19,22 +22,10 @@ func sliceStringsToInterfaces(slice []string) []interface{} {
 
 // ConfirmLinkStudentsHandler handles the confirmation of linking students
 func (a *App) ConfirmLinkStudentsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Get the session from the App's Store
-	session, err := a.Store.Get(r, "session-name")
+	// Authentication is handled via middleware
+	userID, err := middleware.ExtractUserIDFromContext(r.Context())
 	if err != nil {
-		http.Error(w, "Failed to retrieve session", http.StatusInternalServerError)
-		return
-	}
-
-	// Extract the user ID from the session
-	userID, ok := session.Values["user_id"].(string)
-	if !ok || userID == "" {
-		http.Error(w, "UserID not found in session", http.StatusUnauthorized)
+		http.Error(w, "Unauthorized: User ID not found", http.StatusUnauthorized)
 		return
 	}
 
@@ -63,12 +54,9 @@ func (a *App) ConfirmLinkStudentsHandler(w http.ResponseWriter, r *http.Request)
 	parentDocRef := firestoreClient.Collection("parents").Doc(userID)
 
 	// Update the parent's associated_students field
-	_, err = parentDocRef.Update(context.Background(), []firestore.Update{
-		{
-			Path:  "associated_students",
-			Value: firestore.ArrayUnion(confirmedStudentIDsInterface...),
-		},
-	})
+	_, err = parentDocRef.Set(context.Background(), map[string]interface{}{
+		"associated_students": firestore.ArrayUnion(confirmedStudentIDsInterface...),
+	}, firestore.MergeAll)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to link students: %v", err), http.StatusInternalServerError)
 		return

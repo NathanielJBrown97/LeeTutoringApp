@@ -5,7 +5,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, AuthContext } from './contexts/AuthContext';
 import SignIn from './components/SignIn';
 import ParentDashboard from './components/ParentDashboard';
-import DevError from './components/DevError';
+import StudentIntake from './components/StudentIntake';
+import BookingPage from './components/BookingPage'; // Import the new component
 import AuthRedirect from './components/AuthRedirect';
 
 function AppRoutes() {
@@ -35,6 +36,8 @@ function AppRoutes() {
       {authState.authenticated && (
         <>
           <Route path="/parentdashboard" element={<ParentDashboard />} />
+          <Route path="/studentintake" element={<StudentIntake />} />
+          <Route path="/booking" element={<BookingPage />} />
           {/* Redirect any other routes to dashboard */}
           <Route path="*" element={<Navigate to="/parentdashboard" />} />
         </>

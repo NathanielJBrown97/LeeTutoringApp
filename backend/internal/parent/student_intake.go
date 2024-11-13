@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/NathanielJBrown97/LeeTutoringApp/internal/middleware"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -20,24 +21,14 @@ type StudentInfo struct {
 
 // StudentIntakeHandler handles the submission of student IDs
 func (a *App) StudentIntakeHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Get the session
-	session, err := a.Store.Get(r, "session-name")
+	// Authentication is handled via middleware
+	userID, err := middleware.ExtractUserIDFromContext(r.Context())
 	if err != nil {
-		http.Error(w, "Failed to retrieve session", http.StatusInternalServerError)
+		http.Error(w, "Unauthorized: User ID not found", http.StatusUnauthorized)
 		return
 	}
-
-	// Extract the user ID from the session
-	userID, ok := session.Values["user_id"].(string)
-	if !ok || userID == "" {
-		http.Error(w, "UserID not found in session", http.StatusUnauthorized)
-		return
-	}
+	// Optionally, use userID for logging or other purposes
+	log.Printf("User ID in StudentIntakeHandler: %s", userID)
 
 	// Parse the JSON request body
 	var requestData struct {
