@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 
+	firestoreupdater "github.com/NathanielJBrown97/LeeTutoringApp/cmd/firestoreupdater"
 	"github.com/NathanielJBrown97/LeeTutoringApp/internal/auth"
 	"github.com/NathanielJBrown97/LeeTutoringApp/internal/config"
 	"github.com/NathanielJBrown97/LeeTutoringApp/internal/dashboard"
@@ -14,7 +15,6 @@ import (
 	microsoftauth "github.com/NathanielJBrown97/LeeTutoringApp/internal/microsoftauth"
 	"github.com/NathanielJBrown97/LeeTutoringApp/internal/middleware"
 	parentpkg "github.com/NathanielJBrown97/LeeTutoringApp/internal/parent"
-	"github.com/NathanielJBrown97/LeetutoringApp/cmd/firestoreupdater"
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
 	"golang.org/x/oauth2"
@@ -181,6 +181,8 @@ func main() {
 	r.HandleFunc("/internal/microsoftauth/callback", microsoftApp.OAuthCallbackHandler).Methods("GET")
 
 	// Firestore Updater Routes
+
+	//Firestore updater -- HOMEWORK COMPLETION
 	r.HandleFunc("/internal/firestoreupdater/homeworkCompletion", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
 			// Set CORS headers
@@ -192,6 +194,20 @@ func main() {
 		}
 		// Call the handler
 		firestoreUpdaterApp.UpdateHomeworkCompletionHandler(w, r)
+	}).Methods("POST", "OPTIONS")
+
+	// Firestore updater -- TEST DATA
+	r.HandleFunc("/internal/firestoreupdater/testData", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			// Set CORS headers
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		// Call the handler
+		firestoreUpdaterApp.UpdateTestDataHandler(w, r)
 	}).Methods("POST", "OPTIONS")
 
 	// Use CORS middleware

@@ -6,15 +6,8 @@ import (
 	"log"
 	"net/http"
 
-	"cloud.google.com/go/firestore"
-	"github.com/NathanielJBrown97/LeeTutoringApp/internal/config"
 	"google.golang.org/api/iterator"
 )
-
-type App struct {
-	Config          *config.Config
-	FirestoreClient *firestore.Client
-}
 
 type HomeworkCompletion struct {
 	StudentName string `json:"studentName"`

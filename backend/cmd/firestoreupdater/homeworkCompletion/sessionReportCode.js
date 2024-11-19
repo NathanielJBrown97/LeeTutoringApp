@@ -25,7 +25,7 @@ function loadHomeworkIntoSheet(comp) {
 
 function sendHomeworkCompletionToBackend(studentName, dateStr, percentage) {
   try {
-    let url = "https://your-backend-endpoint-url"; // Replace with your actual backend URL
+    let url = "https://agora-backend-1057197198698.us-east1.run.app/cmd/firestoreupdater/homeworkCompletion";
 
     let data = {
       "studentName": studentName,
@@ -43,6 +43,7 @@ function sendHomeworkCompletionToBackend(studentName, dateStr, percentage) {
     let response = UrlFetchApp.fetch(url, options);
     Logger.log("Homework completion data sent to backend");
     Logger.log(response.getContentText());
+    
   } catch (error) {
     Logger.log("Failed to send homework completion data to backend");
     Logger.log(error);
