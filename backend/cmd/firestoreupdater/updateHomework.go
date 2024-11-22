@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"google.golang.org/api/iterator"
 )
@@ -45,8 +46,10 @@ func (app *App) UpdateHomeworkCompletionHandler(w http.ResponseWriter, r *http.R
 	// Access the 'Homework Completion' subcollection
 	homeworkCompCollection := studentDocRef.Collection("Homework Completion")
 
+	sanitizedDate := strings.ReplaceAll(hwComp.Date, "/", "-")
+
 	// Create or update the document with the date as the document ID
-	docRef := homeworkCompCollection.Doc(hwComp.Date)
+	docRef := homeworkCompCollection.Doc(sanitizedDate)
 
 	data := map[string]interface{}{
 		"date":       hwComp.Date,

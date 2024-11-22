@@ -183,7 +183,7 @@ func main() {
 	// Firestore Updater Routes
 
 	//Firestore updater -- HOMEWORK COMPLETION
-	r.HandleFunc("/internal/firestoreupdater/homeworkCompletion", func(w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc("/cmd/firestoreupdater/homeworkCompletion", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
 			// Set CORS headers
 			w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -197,7 +197,7 @@ func main() {
 	}).Methods("POST", "OPTIONS")
 
 	// Firestore updater -- TEST DATA
-	r.HandleFunc("/internal/firestoreupdater/testData", func(w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc("/cmd/firestoreupdater/testData", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
 			// Set CORS headers
 			w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -208,6 +208,34 @@ func main() {
 		}
 		// Call the handler
 		firestoreUpdaterApp.UpdateTestDataHandler(w, r)
+	}).Methods("POST", "OPTIONS")
+
+	// Firestore updater -- TEST DATES TRIGGER
+	r.HandleFunc("/cmd/firestoreupdater/testDatesTrigger", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			// Set CORS headers
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		// Call the handler
+		firestoreUpdaterApp.UpdateTestDatesHandler(w, r)
+	}).Methods("POST", "OPTIONS")
+
+	// Firestore updater -- GOALS TRIGGER
+	r.HandleFunc("/cmd/firestoreupdater/updateGoals", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			// Set CORS headers
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		// Call the handler
+		firestoreUpdaterApp.UpdateGoalsHandler(w, r)
 	}).Methods("POST", "OPTIONS")
 
 	// Use CORS middleware
