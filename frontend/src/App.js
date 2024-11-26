@@ -8,6 +8,7 @@ import ParentDashboard from './components/ParentDashboard';
 import StudentIntake from './components/StudentIntake';
 import BookingPage from './components/BookingPage'; // Import the new component
 import AuthRedirect from './components/AuthRedirect';
+import ParentProfile from './components/ParentProfile'; // Import ParentProfile
 
 function AppRoutes() {
   const authState = useContext(AuthContext);
@@ -38,6 +39,8 @@ function AppRoutes() {
           <Route path="/parentdashboard" element={<ParentDashboard />} />
           <Route path="/studentintake" element={<StudentIntake />} />
           <Route path="/booking" element={<BookingPage />} />
+          {/* Temporary route for ParentProfile */}
+          <Route path="/parentprofile" element={<ParentProfile />} />
           {/* Redirect any other routes to dashboard */}
           <Route path="*" element={<Navigate to="/parentdashboard" />} />
         </>

@@ -57,6 +57,20 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Extract name
+	name, ok := payload.Claims["name"].(string)
+	if !ok {
+		log.Println("Name not found in ID token")
+		name = ""
+	}
+
+	// Extract picture URL
+	pictureURL, ok := payload.Claims["picture"].(string)
+	if !ok {
+		log.Println("Picture URL not found in ID token")
+		pictureURL = ""
+	}
+
 	// Generate a JWT token without associated_students
 	tokenClaims := jwt.MapClaims{
 		"user_id": userID,
@@ -87,6 +101,8 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 			_, err = docRef.Set(context.Background(), map[string]interface{}{
 				"user_id":             userID,
 				"email":               email,
+				"name":                name,
+				"picture":             pictureURL,
 				"access_token":        token.AccessToken,
 				"refresh_token":       token.RefreshToken,
 				"expiry":              token.Expiry,
@@ -118,8 +134,18 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 			updates = append(updates, firestore.Update{Path: "expiry", Value: token.Expiry})
 			needsUpdate = true
 		}
+		// Update name if it has changed
+		if data["name"] != name {
+			updates = append(updates, firestore.Update{Path: "name", Value: name})
+			needsUpdate = true
+		}
+		// Update picture URL if it has changed
+		if data["picture"] != pictureURL {
+			updates = append(updates, firestore.Update{Path: "picture", Value: pictureURL})
+			needsUpdate = true
+		}
 
-		if needsUpdate {
+		if needsUpdate && len(updates) > 0 {
 			_, err = docRef.Update(context.Background(), updates)
 			if err != nil {
 				http.Error(w, "Failed to update user tokens in Firestore", http.StatusInternalServerError)

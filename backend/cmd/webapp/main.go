@@ -174,6 +174,18 @@ func main() {
 
 	r.Handle("/api/auth/status", authMiddleware(http.HandlerFunc(authApp.StatusHandler))).Methods("GET", "OPTIONS")
 
+	// ParentHandler route
+	r.HandleFunc("/api/parent", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(dashboardApp.ParentHandler)).ServeHTTP(w, r)
+	}).Methods("GET", "OPTIONS")
+
 	// OAuth handlers
 	r.HandleFunc("/internal/googleauth/oauth", googleApp.OAuthHandler).Methods("GET")
 	r.HandleFunc("/internal/googleauth/callback", googleApp.OAuthCallbackHandler).Methods("GET")
@@ -181,6 +193,20 @@ func main() {
 	r.HandleFunc("/internal/microsoftauth/callback", microsoftApp.OAuthCallbackHandler).Methods("GET")
 
 	// Firestore Updater Routes
+
+	//Firestore updater -- INITIALIZE NEW STUDENT
+	r.HandleFunc("/cmd/firestoreupdater/initializeNewStudent", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			// Set CORS headers
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		// Call the handler
+		firestoreupdater.InitializeNewStudent(w, r)
+	}).Methods("POST", "OPTIONS")
 
 	//Firestore updater -- HOMEWORK COMPLETION
 	r.HandleFunc("/cmd/firestoreupdater/homeworkCompletion", func(w http.ResponseWriter, r *http.Request) {
