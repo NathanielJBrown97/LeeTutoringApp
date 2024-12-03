@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 
@@ -25,6 +26,14 @@ type StudentData struct {
 	Availability      string `json:"availability"`
 	RegisteredForTest bool   `json:"registered_for_test"`
 	TestDate          string `json:"test_date"`
+	ClassroomID       string `json:"classroom_id"`
+	DriveURL          string `json:"drive_url"`
+	// FirestoreID       string `json:"firestore_id"` // Commented out; will be set internally
+}
+
+type ResponseData struct {
+	Message   string `json:"message"`
+	StudentID string `json:"student_id"`
 }
 
 func InitializeNewStudent(w http.ResponseWriter, r *http.Request) {
@@ -32,14 +41,25 @@ func InitializeNewStudent(w http.ResponseWriter, r *http.Request) {
 	var studentData StudentData
 	err := json.NewDecoder(r.Body).Decode(&studentData)
 	if err != nil {
+		log.Printf("Invalid request payload: %v", err)
 		http.Error(w, "Invalid request payload: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	// Log the received student data
+	log.Printf("Received student data: %+v", studentData)
+
 	// Initialize Firestore client
 	ctx := context.Background()
-	client, err := firestore.NewClient(ctx, os.Getenv("FIREBASE_PROJECT_ID"))
+	projectID := os.Getenv("FIREBASE_PROJECT_ID")
+	if projectID == "" {
+		log.Println("FIREBASE_PROJECT_ID environment variable is not set")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	client, err := firestore.NewClient(ctx, projectID)
 	if err != nil {
+		log.Printf("Failed to create Firestore client: %v", err)
 		http.Error(w, "Failed to create Firestore client: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -48,6 +68,9 @@ func InitializeNewStudent(w http.ResponseWriter, r *http.Request) {
 	// Generate a unique ID for the new student document
 	docRef := client.Collection("students").NewDoc()
 	studentID := docRef.ID
+
+	// Log the generated student ID
+	log.Printf("Generated student ID: %s", studentID)
 
 	// Prepare 'personal' data
 	personalData := map[string]interface{}{
@@ -60,6 +83,7 @@ func InitializeNewStudent(w http.ResponseWriter, r *http.Request) {
 		"grade":          studentData.Grade,
 		"accommodations": studentData.Accommodations,
 		"interests":      studentData.Interests,
+		// "firestore_id":   studentID, // Optionally include firestore_id
 	}
 
 	// Prepare 'test_appointment' data
@@ -78,6 +102,8 @@ func InitializeNewStudent(w http.ResponseWriter, r *http.Request) {
 		"team_lead":         "",         // Initialize as empty string
 		"remaining_hours":   0,          // Initialize as zero
 		"lifetime_hours":    0,          // Initialize as zero
+		"classroom_id":      studentData.ClassroomID,
+		"drive_url":         studentData.DriveURL,
 	}
 
 	// Combine 'personal' and 'business' into the student document
@@ -86,13 +112,33 @@ func InitializeNewStudent(w http.ResponseWriter, r *http.Request) {
 		"business": businessData,
 	}
 
+	// Log the data to be written to Firestore
+	log.Printf("studentDocData to be written: %+v", studentDocData)
+
 	// Write the student document to Firestore
 	_, err = docRef.Set(ctx, studentDocData)
 	if err != nil {
+		log.Printf("Failed to save student data: %v", err)
 		http.Error(w, "Failed to save student data: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Respond with success
-	fmt.Fprintf(w, "Student %s initialized successfully with ID %s", studentData.Name, studentID)
+	// Prepare the JSON response
+	responseData := ResponseData{
+		Message:   fmt.Sprintf("Student %s initialized successfully", studentData.Name),
+		StudentID: studentID,
+	}
+
+	// Set response header to application/json
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	// Encode and send the JSON response
+	err = json.NewEncoder(w).Encode(responseData)
+	if err != nil {
+		log.Printf("Failed to encode response: %v", err)
+	}
+
+	// Log successful completion
+	log.Printf("Successfully initialized student: %s", studentData.Name)
 }

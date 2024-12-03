@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -15,11 +16,13 @@ import (
 	microsoftauth "github.com/NathanielJBrown97/LeeTutoringApp/internal/microsoftauth"
 	"github.com/NathanielJBrown97/LeeTutoringApp/internal/middleware"
 	parentpkg "github.com/NathanielJBrown97/LeeTutoringApp/internal/parent"
+	"github.com/NathanielJBrown97/LeeTutoringApp/internal/yahooauth"
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-	"golang.org/x/oauth2/microsoft"
+
+	"cloud.google.com/go/firestore"
 )
 
 func main() {
@@ -30,7 +33,7 @@ func main() {
 	}
 
 	// Initialize Firestore client
-	firestoreClient, err := config.InitializeFirestore(cfg)
+	firestoreClient, err := firestore.NewClient(context.Background(), cfg.GOOGLE_CLOUD_PROJECT)
 	if err != nil {
 		log.Fatalf("Error initializing Firestore: %v", err)
 	}
@@ -56,18 +59,38 @@ func main() {
 	}
 
 	// Microsoft OAuth2 configuration
-	microsoftConf := &oauth2.Config{
+	microsoftOauthConfig := &oauth2.Config{
 		ClientID:     cfg.MICROSOFT_CLIENT_ID,
 		ClientSecret: cfg.MICROSOFT_CLIENT_SECRET,
 		RedirectURL:  cfg.MICROSOFT_REDIRECT_URL,
-		Scopes:       []string{"openid", "profile", "email", "offline_access"},
-		Endpoint:     microsoft.AzureADEndpoint("common"),
+		Scopes:       []string{"openid", "email", "profile"},
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+			TokenURL: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+		},
 	}
 
-	microsoftApp := microsoftauth.App{
+	microsoftApp := &microsoftauth.App{
 		Config:          cfg,
-		OAuthConfig:     microsoftConf,
+		OAuthConfig:     microsoftOauthConfig,
 		FirestoreClient: firestoreClient,
+		SecretKey:       secretKey,
+	}
+
+	// Yahoo OAuth2 configuration
+	yahooConf := &oauth2.Config{
+		ClientID:     cfg.YAHOO_CLIENT_ID,
+		ClientSecret: cfg.YAHOO_CLIENT_SECRET,
+		RedirectURL:  cfg.YAHOO_REDIRECT_URL,
+		Scopes:       []string{"openid"},
+		Endpoint:     yahooauth.YahooEndpoint,
+	}
+
+	yahooApp := yahooauth.App{
+		Config:          cfg,
+		OAuthConfig:     yahooConf,
+		FirestoreClient: firestoreClient,
+		SecretKey:       secretKey,
 	}
 
 	// Initialize parent App
@@ -100,38 +123,32 @@ func main() {
 	// Use the AuthMiddleware for protected routes
 	authMiddleware := middleware.AuthMiddleware(secretKey)
 
-	// API routes
+	// API routes with CORS and OPTIONS handling
 
-	// Dashboard route with OPTIONS handling
+	// Dashboard route
 	r.HandleFunc("/api/dashboard", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			// Handle preflight request
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		authMiddleware(http.HandlerFunc(dashboardApp.Handler)).ServeHTTP(w, r)
 	}).Methods("GET", "OPTIONS")
 
-	// Associated students route with OPTIONS handling
+	// Associated students route
 	r.HandleFunc("/api/associated-students", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			// Handle preflight request
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		authMiddleware(http.HandlerFunc(dashboardApp.AssociatedStudentsHandler)).ServeHTTP(w, r)
 	}).Methods("GET", "OPTIONS")
 
-	// Student detail route with OPTIONS handling
+	// Student detail route
 	r.HandleFunc("/api/students/{student_id}", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			// Handle preflight request
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -141,9 +158,7 @@ func main() {
 	// Parent routes
 	r.HandleFunc("/api/submitStudentIDs", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			// Handle preflight request
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -152,9 +167,7 @@ func main() {
 
 	r.HandleFunc("/api/confirmLinkStudents", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			// Handle preflight request
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -163,104 +176,89 @@ func main() {
 
 	r.HandleFunc("/api/attemptAutomaticAssociation", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			// Handle preflight request
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		authMiddleware(http.HandlerFunc(parentApp.AttemptAutomaticAssociation)).ServeHTTP(w, r)
 	}).Methods("POST", "OPTIONS")
 
+	// Auth status route
 	r.Handle("/api/auth/status", authMiddleware(http.HandlerFunc(authApp.StatusHandler))).Methods("GET", "OPTIONS")
 
 	// ParentHandler route
 	r.HandleFunc("/api/parent", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			// Handle preflight request
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		authMiddleware(http.HandlerFunc(dashboardApp.ParentHandler)).ServeHTTP(w, r)
 	}).Methods("GET", "OPTIONS")
 
-	// OAuth handlers
+	// OAUTH HANDLERS
+
+	// Google OAuth handlers
 	r.HandleFunc("/internal/googleauth/oauth", googleApp.OAuthHandler).Methods("GET")
 	r.HandleFunc("/internal/googleauth/callback", googleApp.OAuthCallbackHandler).Methods("GET")
+
+	// Microsoft OAuth handlers
 	r.HandleFunc("/internal/microsoftauth/oauth", microsoftApp.OAuthHandler).Methods("GET")
 	r.HandleFunc("/internal/microsoftauth/callback", microsoftApp.OAuthCallbackHandler).Methods("GET")
 
-	// Firestore Updater Routes
+	// Yahoo OAuth handlers
+	r.HandleFunc("/internal/yahooauth/oauth", yahooApp.OAuthHandler).Methods("GET")
+	r.HandleFunc("/internal/yahooauth/callback", yahooApp.OAuthCallbackHandler).Methods("GET")
 
-	//Firestore updater -- INITIALIZE NEW STUDENT
+	// Firestore Updater Routes with CORS and OPTIONS handling
+
+	// Initialize New Student
 	r.HandleFunc("/cmd/firestoreupdater/initializeNewStudent", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
-			// Set CORS headers
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			// Handle preflight request
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		// Call the handler
 		firestoreupdater.InitializeNewStudent(w, r)
 	}).Methods("POST", "OPTIONS")
 
-	//Firestore updater -- HOMEWORK COMPLETION
+	// Homework Completion
 	r.HandleFunc("/cmd/firestoreupdater/homeworkCompletion", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
-			// Set CORS headers
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			// Handle preflight request
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		// Call the handler
 		firestoreUpdaterApp.UpdateHomeworkCompletionHandler(w, r)
 	}).Methods("POST", "OPTIONS")
 
-	// Firestore updater -- TEST DATA
+	// Test Data
 	r.HandleFunc("/cmd/firestoreupdater/testData", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
-			// Set CORS headers
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			// Handle preflight request
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		// Call the handler
 		firestoreUpdaterApp.UpdateTestDataHandler(w, r)
 	}).Methods("POST", "OPTIONS")
 
-	// Firestore updater -- TEST DATES TRIGGER
+	// Test Dates Trigger
 	r.HandleFunc("/cmd/firestoreupdater/testDatesTrigger", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
-			// Set CORS headers
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			// Handle preflight request
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		// Call the handler
 		firestoreUpdaterApp.UpdateTestDatesHandler(w, r)
 	}).Methods("POST", "OPTIONS")
 
-	// Firestore updater -- GOALS TRIGGER
+	// Update Goals
 	r.HandleFunc("/cmd/firestoreupdater/updateGoals", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
-			// Set CORS headers
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			// Handle preflight request
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		// Call the handler
 		firestoreUpdaterApp.UpdateGoalsHandler(w, r)
 	}).Methods("POST", "OPTIONS")
 
@@ -270,7 +268,7 @@ func main() {
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
-		Debug:            true, // Enable debug mode to log CORS issues
+		Debug:            false, // Disable debug mode in production
 	})
 	handler := c.Handler(r)
 

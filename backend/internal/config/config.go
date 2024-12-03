@@ -19,7 +19,11 @@ type Config struct {
 	MICROSOFT_CLIENT_SECRET        string
 	MICROSOFT_REDIRECT_URL         string
 	MICROSOFT_TENANT_ID            string
+	YAHOO_CLIENT_ID                string
+	YAHOO_CLIENT_SECRET            string
+	YAHOO_REDIRECT_URL             string
 	SESSION_SECRET                 string
+	SECRET_KEY                     string
 	GOOGLE_CLOUD_PROJECT           string
 	GOOGLE_APPLICATION_CREDENTIALS string
 }
@@ -34,7 +38,11 @@ func LoadConfig() (*Config, error) {
 		MICROSOFT_CLIENT_SECRET:        os.Getenv("MICROSOFT_CLIENT_SECRET"),
 		MICROSOFT_REDIRECT_URL:         os.Getenv("MICROSOFT_REDIRECT_URL"),
 		MICROSOFT_TENANT_ID:            os.Getenv("MICROSOFT_TENANT_ID"),
+		YAHOO_CLIENT_ID:                os.Getenv("YAHOO_CLIENT_ID"),
+		YAHOO_CLIENT_SECRET:            os.Getenv("YAHOO_CLIENT_SECRET"),
+		YAHOO_REDIRECT_URL:             os.Getenv("YAHOO_REDIRECT_URL"),
 		SESSION_SECRET:                 os.Getenv("SESSION_SECRET"),
+		SECRET_KEY:                     os.Getenv("SECRET_KEY"),
 		GOOGLE_CLOUD_PROJECT:           os.Getenv("GOOGLE_CLOUD_PROJECT"),
 		GOOGLE_APPLICATION_CREDENTIALS: os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"),
 	}, nil

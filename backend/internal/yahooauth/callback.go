@@ -1,25 +1,45 @@
-// backend/internal/microsoftauth/callback.go
+// backend/internal/yahooauth/callback.go
 
-package microsoftauth
+package yahooauth
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"cloud.google.com/go/firestore"
-	"github.com/coreos/go-oidc"
 	"github.com/golang-jwt/jwt/v4"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
+	// Retrieve the state from the cookie
+	oauthStateCookie, err := r.Cookie("oauthstate")
+	if err != nil {
+		http.Error(w, "No OAuth state cookie", http.StatusBadRequest)
+		return
+	}
+
+	// Compare the state parameter
+	state := r.URL.Query().Get("state")
+	if state != oauthStateCookie.Value {
+		http.Error(w, "Invalid OAuth state", http.StatusBadRequest)
+		return
+	}
+
+	// Check if there's an error in the query parameters
+	if errParam := r.URL.Query().Get("error"); errParam != "" {
+		errorDescription := r.URL.Query().Get("error_description")
+		log.Printf("OAuth error: %s - %s", errParam, errorDescription)
+		http.Error(w, fmt.Sprintf("OAuth error: %s - %s", errParam, errorDescription), http.StatusBadRequest)
+		return
+	}
+
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		http.Error(w, "Code not found in the request", http.StatusBadRequest)
@@ -34,101 +54,46 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract the ID Token from OAuth2 token
-	rawIDToken, ok := token.Extra("id_token").(string)
-	if !ok {
-		http.Error(w, "No ID token found", http.StatusBadRequest)
-		return
-	}
+	// Use the access token to get user information from Yahoo
+	client := a.OAuthConfig.Client(context.Background(), token)
+	userInfoURL := "https://api.login.yahoo.com/openid/v1/userinfo"
 
-	// Fetch the OpenID Connect discovery document
-	providerURL := "https://login.microsoftonline.com/common/v2.0"
-	resp, err := http.Get(providerURL + "/.well-known/openid-configuration")
+	resp, err := client.Get(userInfoURL)
 	if err != nil {
-		http.Error(w, "Failed to get provider configuration: "+err.Error(), http.StatusInternalServerError)
+		log.Printf("Failed to get user info: %v", err)
+		http.Error(w, "Failed to get user info", http.StatusInternalServerError)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		http.Error(w, "Failed to get provider configuration: "+resp.Status, http.StatusInternalServerError)
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("Failed to get user info: %s", body)
+		http.Error(w, "Failed to get user info", http.StatusInternalServerError)
 		return
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		http.Error(w, "Failed to read provider configuration: "+err.Error(), http.StatusInternalServerError)
+	var userInfo struct {
+		Sub           string `json:"sub"`
+		Name          string `json:"name"`
+		Email         string `json:"email"`
+		EmailVerified bool   `json:"email_verified"`
+		Locale        string `json:"locale"`
+		Picture       string `json:"picture"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
+		log.Printf("Failed to parse user info: %v", err)
+		http.Error(w, "Failed to parse user info", http.StatusInternalServerError)
 		return
 	}
 
-	var providerData struct {
-		Issuer  string `json:"issuer"`
-		JWKSURI string `json:"jwks_uri"`
-	}
-	if err := json.Unmarshal(body, &providerData); err != nil {
-		http.Error(w, "Failed to parse provider configuration: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+	userID := userInfo.Sub
+	email := userInfo.Email
+	name := userInfo.Name
+	pictureURL := userInfo.Picture
 
-	// Set up an OpenID Connect verifier with the dynamic issuer
-	oidcConfig := &oidc.Config{
-		ClientID:             a.Config.MICROSOFT_CLIENT_ID,
-		SkipIssuerCheck:      true, // We'll handle issuer check manually
-		SupportedSigningAlgs: []string{"RS256"},
-	}
-
-	keySet := oidc.NewRemoteKeySet(context.Background(), providerData.JWKSURI)
-	verifier := oidc.NewVerifier(providerData.Issuer, keySet, oidcConfig)
-
-	// Verify the ID token
-	idToken, err := verifier.Verify(context.Background(), rawIDToken)
-	if err != nil {
-		http.Error(w, "Failed to verify ID token: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Manually validate the issuer
-	expectedIssuerPrefix := "https://login.microsoftonline.com/"
-	expectedIssuerSuffix := "/v2.0"
-	issuer := idToken.Issuer
-
-	if !strings.HasPrefix(issuer, expectedIssuerPrefix) || !strings.HasSuffix(issuer, expectedIssuerSuffix) {
-		http.Error(w, "Invalid issuer: "+issuer, http.StatusUnauthorized)
-		return
-	}
-
-	// Extract user claims
-	var claims struct {
-		Sub               string `json:"sub"`
-		PreferredUsername string `json:"preferred_username"`
-		Email             string `json:"email"`
-		Name              string `json:"name"`
-		Picture           string `json:"picture"`
-	}
-	if err := idToken.Claims(&claims); err != nil {
-		http.Error(w, "Failed to parse claims: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	userID := claims.Sub
-	email := claims.Email
-	if email == "" {
-		email = claims.PreferredUsername
-	}
-
-	name := claims.Name
-	if name == "" {
-		log.Println("Name not found in ID token")
-		name = ""
-	}
-
-	pictureURL := claims.Picture
-	if pictureURL == "" {
-		log.Println("Picture URL not found in ID token")
-		pictureURL = ""
-	}
-
-	// Generate a JWT token without associated_students
+	// Generate a JWT token
 	tokenClaims := jwt.MapClaims{
 		"user_id": userID,
 		"email":   email,
@@ -211,7 +176,6 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	log.Printf("OAuthCallbackHandler: Received code=%s", code)
 	log.Printf("OAuthCallbackHandler: User authenticated: %s (%s)", userID, email)
 	log.Printf("OAuthCallbackHandler: Redirecting to dashboard")
 
