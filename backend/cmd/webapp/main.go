@@ -12,6 +12,7 @@ import (
 	"github.com/NathanielJBrown97/LeeTutoringApp/internal/auth"
 	"github.com/NathanielJBrown97/LeeTutoringApp/internal/config"
 	"github.com/NathanielJBrown97/LeeTutoringApp/internal/dashboard"
+	"github.com/NathanielJBrown97/LeeTutoringApp/internal/facebookauth"
 	googleauth "github.com/NathanielJBrown97/LeeTutoringApp/internal/googleauth"
 	microsoftauth "github.com/NathanielJBrown97/LeeTutoringApp/internal/microsoftauth"
 	"github.com/NathanielJBrown97/LeeTutoringApp/internal/middleware"
@@ -20,6 +21,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
 	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/facebook"
 	"golang.org/x/oauth2/google"
 
 	"cloud.google.com/go/firestore"
@@ -89,6 +91,22 @@ func main() {
 	yahooApp := yahooauth.App{
 		Config:          cfg,
 		OAuthConfig:     yahooConf,
+		FirestoreClient: firestoreClient,
+		SecretKey:       secretKey,
+	}
+
+	// Facebook OAuth2 configuration
+	facebookConf := &oauth2.Config{
+		ClientID:     cfg.FACEBOOK_CLIENT_ID,
+		ClientSecret: cfg.FACEBOOK_CLIENT_SECRET,
+		RedirectURL:  cfg.FACEBOOK_REDIRECT_URL,
+		Scopes:       []string{"public_profile", "email"},
+		Endpoint:     facebook.Endpoint,
+	}
+
+	facebookApp := facebookauth.App{
+		Config:          cfg,
+		OAuthConfig:     facebookConf,
 		FirestoreClient: firestoreClient,
 		SecretKey:       secretKey,
 	}
@@ -209,6 +227,10 @@ func main() {
 	// Yahoo OAuth handlers
 	r.HandleFunc("/internal/yahooauth/oauth", yahooApp.OAuthHandler).Methods("GET")
 	r.HandleFunc("/internal/yahooauth/callback", yahooApp.OAuthCallbackHandler).Methods("GET")
+
+	// Facebook OAuth handlers
+	r.HandleFunc("/internal/facebookauth/oauth", facebookApp.OAuthHandler).Methods("GET")
+	r.HandleFunc("/internal/facebookauth/callback", facebookApp.OAuthCallbackHandler).Methods("GET")
 
 	// Firestore Updater Routes with CORS and OPTIONS handling
 

@@ -22,6 +22,9 @@ type Config struct {
 	YAHOO_CLIENT_ID                string
 	YAHOO_CLIENT_SECRET            string
 	YAHOO_REDIRECT_URL             string
+	FACEBOOK_CLIENT_ID             string
+	FACEBOOK_CLIENT_SECRET         string
+	FACEBOOK_REDIRECT_URL          string
 	SESSION_SECRET                 string
 	SECRET_KEY                     string
 	GOOGLE_CLOUD_PROJECT           string
@@ -41,6 +44,9 @@ func LoadConfig() (*Config, error) {
 		YAHOO_CLIENT_ID:                os.Getenv("YAHOO_CLIENT_ID"),
 		YAHOO_CLIENT_SECRET:            os.Getenv("YAHOO_CLIENT_SECRET"),
 		YAHOO_REDIRECT_URL:             os.Getenv("YAHOO_REDIRECT_URL"),
+		FACEBOOK_CLIENT_ID:             os.Getenv("FACEBOOK_CLIENT_ID"),
+		FACEBOOK_CLIENT_SECRET:         os.Getenv("FACEBOOK_CLIENT_SECRET"),
+		FACEBOOK_REDIRECT_URL:          os.Getenv("FACEBOOK_REDIRECT_URL"),
 		SESSION_SECRET:                 os.Getenv("SESSION_SECRET"),
 		SECRET_KEY:                     os.Getenv("SECRET_KEY"),
 		GOOGLE_CLOUD_PROJECT:           os.Getenv("GOOGLE_CLOUD_PROJECT"),

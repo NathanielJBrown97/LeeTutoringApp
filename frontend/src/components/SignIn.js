@@ -19,6 +19,10 @@ const SignIn = () => {
   const handleYahooLogin = () => {
     window.location.href = `${API_BASE_URL}/internal/yahooauth/oauth`;
   };
+    // Handler for Facebook Sign-In
+    const handleFacebookLogin = () => {
+      window.location.href = `${API_BASE_URL}/internal/facebookauth/oauth`;
+    };
 
 
   // Handler for Disabled Buttons
@@ -40,12 +44,8 @@ const SignIn = () => {
         <button className="signin-button yahoo" onClick={handleYahooLogin}>
           Sign in with Yahoo
         </button>
-        <button
-          className="signin-button yahoo disabled"
-          onClick={() => handleDisabledClick('Yahoo')}
-          disabled
-        >
-          Sign in with Yahoo (Coming Soon)
+        <button className="signin-button facebook" onClick={handleFacebookLogin}>
+          Sign in with Facebook
         </button>
         <button
           className="signin-button apple disabled"
