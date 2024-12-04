@@ -65,7 +65,7 @@ func main() {
 		ClientID:     cfg.MICROSOFT_CLIENT_ID,
 		ClientSecret: cfg.MICROSOFT_CLIENT_SECRET,
 		RedirectURL:  cfg.MICROSOFT_REDIRECT_URL,
-		Scopes:       []string{"openid", "email", "profile"},
+		Scopes:       []string{"openid", "email", "profile", "User.Read"},
 		Endpoint: oauth2.Endpoint{
 			AuthURL:  "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
 			TokenURL: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
@@ -223,6 +223,8 @@ func main() {
 	// Microsoft OAuth handlers
 	r.HandleFunc("/internal/microsoftauth/oauth", microsoftApp.OAuthHandler).Methods("GET")
 	r.HandleFunc("/internal/microsoftauth/callback", microsoftApp.OAuthCallbackHandler).Methods("GET")
+	// **Microsoft's ProfilePictureHandler**
+	r.HandleFunc("/internal/microsoftauth/profile-picture", microsoftApp.ProfilePictureHandler).Methods("GET")
 
 	// Yahoo OAuth handlers
 	r.HandleFunc("/internal/yahooauth/oauth", yahooApp.OAuthHandler).Methods("GET")

@@ -97,13 +97,12 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract user claims
+	// Extract user claims from ID token
 	var claims struct {
 		Sub               string `json:"sub"`
 		PreferredUsername string `json:"preferred_username"`
 		Email             string `json:"email"`
 		Name              string `json:"name"`
-		Picture           string `json:"picture"`
 	}
 	if err := idToken.Claims(&claims); err != nil {
 		http.Error(w, "Failed to parse claims: "+err.Error(), http.StatusInternalServerError)
@@ -118,14 +117,73 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	name := claims.Name
 	if name == "" {
-		log.Println("Name not found in ID token")
-		name = ""
+		// Fetch user profile from Microsoft Graph API
+		req, err := http.NewRequest("GET", "https://graph.microsoft.com/v1.0/me", nil)
+		if err != nil {
+			http.Error(w, "Failed to create request: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+
+		client := &http.Client{}
+		resp, err = client.Do(req)
+		if err != nil {
+			http.Error(w, "Failed to get user profile: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			http.Error(w, "Failed to get user profile: "+resp.Status, http.StatusInternalServerError)
+			return
+		}
+
+		body, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			http.Error(w, "Failed to read user profile response: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		var userData struct {
+			ID                string `json:"id"`
+			DisplayName       string `json:"displayName"`
+			Mail              string `json:"mail"`
+			UserPrincipalName string `json:"userPrincipalName"`
+		}
+		if err := json.Unmarshal(body, &userData); err != nil {
+			http.Error(w, "Failed to parse user profile: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Update userID, name, and email based on userData
+		userID = userData.ID
+		name = userData.DisplayName
+		if name == "" {
+			name = userData.UserPrincipalName
+		}
+		if email == "" {
+			email = userData.Mail
+			if email == "" {
+				email = userData.UserPrincipalName
+			}
+		}
 	}
 
-	pictureURL := claims.Picture
-	if pictureURL == "" {
-		log.Println("Picture URL not found in ID token")
-		pictureURL = ""
+	// Since we cannot get a direct URL to the user's profile picture, we can store a flag indicating the user has a profile picture
+	// Alternatively, you can set pictureURL to an endpoint in your backend that serves the picture when requested
+	hasProfilePicture := false
+
+	// Check if the user has a profile picture
+	photoReq, err := http.NewRequest("GET", "https://graph.microsoft.com/v1.0/me/photo", nil)
+	if err == nil {
+		photoReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
+		photoResp, err := http.DefaultClient.Do(photoReq)
+		if err == nil && photoResp.StatusCode == http.StatusOK {
+			hasProfilePicture = true
+		}
+		if photoResp != nil {
+			photoResp.Body.Close()
+		}
 	}
 
 	// Generate a JWT token without associated_students
@@ -159,7 +217,7 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 				"user_id":             userID,
 				"email":               email,
 				"name":                name,
-				"picture":             pictureURL,
+				"has_profile_picture": hasProfilePicture,
 				"access_token":        token.AccessToken,
 				"refresh_token":       token.RefreshToken,
 				"expiry":              token.Expiry,
@@ -196,9 +254,9 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 			updates = append(updates, firestore.Update{Path: "name", Value: name})
 			needsUpdate = true
 		}
-		// Update picture URL if it has changed
-		if data["picture"] != pictureURL {
-			updates = append(updates, firestore.Update{Path: "picture", Value: pictureURL})
+		// Update hasProfilePicture if it has changed
+		if data["has_profile_picture"] != hasProfilePicture {
+			updates = append(updates, firestore.Update{Path: "has_profile_picture", Value: hasProfilePicture})
 			needsUpdate = true
 		}
 
