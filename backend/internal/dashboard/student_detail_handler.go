@@ -147,9 +147,9 @@ func (a *App) StudentDetailHandler(w http.ResponseWriter, r *http.Request) {
 		for _, doc := range homeworkCompletionDocs {
 			data := doc.Data()
 			homeworkData := map[string]interface{}{
-				"id":         doc.Ref.ID,         // Document ID (date format)
-				"date":       data["date"],       // Date field
-				"percentage": data["percentage"], // Percentage field
+				"id":         doc.Ref.ID,                  // Document ID (date format)
+				"date":       data["date"],                // Date field
+				"percentage": data["percentage_complete"], // Percentage field
 			}
 			homeworkCompletion = append(homeworkCompletion, homeworkData)
 		}

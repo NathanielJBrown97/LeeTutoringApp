@@ -25,6 +25,11 @@ type Config struct {
 	FACEBOOK_CLIENT_ID             string
 	FACEBOOK_CLIENT_SECRET         string
 	FACEBOOK_REDIRECT_URL          string
+	APPLE_CLIENT_ID                string
+	APPLE_TEAM_ID                  string
+	APPLE_KEY_ID                   string
+	APPLE_PRIVATE_KEY              string
+	APPLE_REDIRECT_URL             string
 	SESSION_SECRET                 string
 	SECRET_KEY                     string
 	GOOGLE_CLOUD_PROJECT           string
@@ -47,6 +52,11 @@ func LoadConfig() (*Config, error) {
 		FACEBOOK_CLIENT_ID:             os.Getenv("FACEBOOK_CLIENT_ID"),
 		FACEBOOK_CLIENT_SECRET:         os.Getenv("FACEBOOK_CLIENT_SECRET"),
 		FACEBOOK_REDIRECT_URL:          os.Getenv("FACEBOOK_REDIRECT_URL"),
+		APPLE_CLIENT_ID:                os.Getenv("APPLE_CLIENT_ID"),
+		APPLE_TEAM_ID:                  os.Getenv("APPLE_TEAM_ID"),
+		APPLE_KEY_ID:                   os.Getenv("APPLE_KEY_ID"),
+		APPLE_PRIVATE_KEY:              os.Getenv("APPLE_PRIVATE_KEY"),
+		APPLE_REDIRECT_URL:             os.Getenv("APPLE_REDIRECT_URL"),
 		SESSION_SECRET:                 os.Getenv("SESSION_SECRET"),
 		SECRET_KEY:                     os.Getenv("SECRET_KEY"),
 		GOOGLE_CLOUD_PROJECT:           os.Getenv("GOOGLE_CLOUD_PROJECT"),

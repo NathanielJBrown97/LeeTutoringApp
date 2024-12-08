@@ -9,6 +9,7 @@ import (
 	"os"
 
 	firestoreupdater "github.com/NathanielJBrown97/LeeTutoringApp/cmd/firestoreupdater"
+	"github.com/NathanielJBrown97/LeeTutoringApp/internal/appleauth"
 	"github.com/NathanielJBrown97/LeeTutoringApp/internal/auth"
 	"github.com/NathanielJBrown97/LeeTutoringApp/internal/config"
 	"github.com/NathanielJBrown97/LeeTutoringApp/internal/dashboard"
@@ -107,6 +108,24 @@ func main() {
 	facebookApp := facebookauth.App{
 		Config:          cfg,
 		OAuthConfig:     facebookConf,
+		FirestoreClient: firestoreClient,
+		SecretKey:       secretKey,
+	}
+
+	// Apple OAuth2 configuration
+	appleConf := &oauth2.Config{
+		ClientID:    cfg.APPLE_CLIENT_ID,
+		RedirectURL: cfg.APPLE_REDIRECT_URL,
+		Scopes:      []string{"name", "email"},
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  "https://appleid.apple.com/auth/authorize",
+			TokenURL: "https://appleid.apple.com/auth/token",
+		},
+	}
+
+	appleApp := appleauth.App{
+		Config:          cfg,
+		OAuthConfig:     appleConf,
 		FirestoreClient: firestoreClient,
 		SecretKey:       secretKey,
 	}
@@ -233,6 +252,10 @@ func main() {
 	// Facebook OAuth handlers
 	r.HandleFunc("/internal/facebookauth/oauth", facebookApp.OAuthHandler).Methods("GET")
 	r.HandleFunc("/internal/facebookauth/callback", facebookApp.OAuthCallbackHandler).Methods("GET")
+
+	// Apple OAuth handlers
+	r.HandleFunc("/internal/appleauth/oauth", appleApp.OAuthHandler).Methods("GET")
+	r.HandleFunc("/internal/appleauth/callback", appleApp.OAuthCallbackHandler).Methods("POST")
 
 	// Firestore Updater Routes with CORS and OPTIONS handling
 
