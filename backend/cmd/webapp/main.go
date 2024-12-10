@@ -309,6 +309,16 @@ func main() {
 		firestoreUpdaterApp.UpdateGoalsHandler(w, r)
 	}).Methods("POST", "OPTIONS")
 
+	// Profile Data
+	r.HandleFunc("/cmd/firestoreupdater/profileData", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			// Handle preflight request
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		firestoreUpdaterApp.UpdateProfileHandler(w, r)
+	}).Methods("POST", "OPTIONS")
+
 	// Use CORS middleware
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"https://lee-tutoring-webapp.web.app", "http://localhost:3000"},

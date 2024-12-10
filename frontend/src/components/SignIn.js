@@ -24,11 +24,10 @@ const SignIn = () => {
       window.location.href = `${API_BASE_URL}/internal/facebookauth/oauth`;
     };
 
-
-  // Handler for Disabled Buttons
-  const handleDisabledClick = (provider) => {
-    alert(`Sign in with ${provider} is coming soon!`);
-  };
+    // Handler for Facebook Sign-In
+    const handleAppleLogin = () => {
+      window.location.href = `${API_BASE_URL}/internal/appleauth/oauth`;
+    };
 
   return (
     <div className="signin-container">
@@ -47,12 +46,8 @@ const SignIn = () => {
         <button className="signin-button facebook" onClick={handleFacebookLogin}>
           Sign in with Facebook
         </button>
-        <button
-          className="signin-button apple disabled"
-          onClick={() => handleDisabledClick('Apple')}
-          disabled
-        >
-          Sign in with Apple (Coming Soon)
+        <button className="signin-button apple" onClick={handleAppleLogin}>
+          Sign in with Apple
         </button>
       </div>
     </div>
