@@ -28,12 +28,14 @@ type Config struct {
 	APPLE_CLIENT_ID                string
 	APPLE_TEAM_ID                  string
 	APPLE_KEY_ID                   string
-	APPLE_PRIVATE_KEY              string
 	APPLE_REDIRECT_URL             string
+	APPLE_PRIVATE_KEY              string
+	APPLE_PRIVATE_KEY_B64          string
 	SESSION_SECRET                 string
 	SECRET_KEY                     string
 	GOOGLE_CLOUD_PROJECT           string
 	GOOGLE_APPLICATION_CREDENTIALS string
+	JWT_SECRET                     string
 }
 
 func LoadConfig() (*Config, error) {
@@ -55,9 +57,11 @@ func LoadConfig() (*Config, error) {
 		APPLE_CLIENT_ID:                os.Getenv("APPLE_CLIENT_ID"),
 		APPLE_TEAM_ID:                  os.Getenv("APPLE_TEAM_ID"),
 		APPLE_KEY_ID:                   os.Getenv("APPLE_KEY_ID"),
-		APPLE_PRIVATE_KEY:              os.Getenv("APPLE_PRIVATE_KEY"),
 		APPLE_REDIRECT_URL:             os.Getenv("APPLE_REDIRECT_URL"),
+		APPLE_PRIVATE_KEY:              os.Getenv("APPLE_PRIVATE_KEY"),
+		APPLE_PRIVATE_KEY_B64:          os.Getenv("APPLE_PRIVATE_KEY_B64"),
 		SESSION_SECRET:                 os.Getenv("SESSION_SECRET"),
+		JWT_SECRET:                     os.Getenv("JWT_SECRET"),
 		SECRET_KEY:                     os.Getenv("SECRET_KEY"),
 		GOOGLE_CLOUD_PROJECT:           os.Getenv("GOOGLE_CLOUD_PROJECT"),
 		GOOGLE_APPLICATION_CREDENTIALS: os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"),

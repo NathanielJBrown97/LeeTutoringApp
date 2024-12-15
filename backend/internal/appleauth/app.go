@@ -1,5 +1,3 @@
-// backend/internal/appleauth/app.go
-
 package appleauth
 
 import (

@@ -1,5 +1,3 @@
-// backend/internal/appleauth/oauth.go
-
 package appleauth
 
 import (
@@ -14,11 +12,12 @@ func (a *App) OAuthHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Apple OAuthHandler triggered")
 
 	// Generate the OAuth URL for Apple
+	// Ensure that the redirect_uri set in a.OAuthConfig matches what Apple expects.
 	url := a.OAuthConfig.AuthCodeURL("state",
 		oauth2.SetAuthURLParam("response_type", "code id_token"),
 		oauth2.SetAuthURLParam("response_mode", "form_post"),
 		oauth2.SetAuthURLParam("scope", "name email"),
-		oauth2.SetAuthURLParam("nonce", "random_nonce"), // Replace with actual nonce generation
+		oauth2.SetAuthURLParam("nonce", "random_nonce"), // Replace with a securely generated nonce
 	)
 
 	// Log the generated URL

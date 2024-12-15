@@ -1,20 +1,21 @@
-// backend/internal/appleauth/callback.go
-
 package appleauth
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"cloud.google.com/go/firestore"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/lestrrat-go/jwx/jwk"
+	"golang.org/x/oauth2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -25,13 +26,20 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Parse form data to ensure form fields are read correctly
+	err := r.ParseForm()
+	if err != nil {
+		http.Error(w, "Failed to parse form data", http.StatusBadRequest)
+		return
+	}
+
 	code := r.FormValue("code")
 	if code == "" {
 		http.Error(w, "Code not found in the request", http.StatusBadRequest)
 		return
 	}
 
-	// Get 'user' parameter if available
+	// Get user parameter (name) if available — only on first login Apple provides name
 	userInfoStr := r.FormValue("user")
 	var name string
 	if userInfoStr != "" {
@@ -47,7 +55,7 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Generate the client secret JWT
+	// Generate the client secret JWT for Apple
 	clientSecret, err := a.generateClientSecret()
 	if err != nil {
 		log.Printf("Failed to generate client secret: %v", err)
@@ -55,64 +63,91 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create a new OAuth2 config with the client secret
+	// Create a new OAuth2 config with the generated client secret
 	oauthConfig := *a.OAuthConfig
 	oauthConfig.ClientSecret = clientSecret
 
 	// Exchange the authorization code for tokens
-	token, err := oauthConfig.Exchange(context.Background(), code)
+	// Explicitly add grant_type parameter
+	token, err := oauthConfig.Exchange(
+		context.Background(),
+		code,
+		oauth2.SetAuthURLParam("grant_type", "authorization_code"),
+	)
 	if err != nil {
 		log.Printf("Failed to exchange code for token: %v", err)
 		http.Error(w, "Failed to exchange authorization code for token", http.StatusBadRequest)
 		return
 	}
 
-	// Extract the ID token from the token response
+	// Extract the ID token
 	idTokenStr, ok := token.Extra("id_token").(string)
 	if !ok {
 		http.Error(w, "No ID token found in token response", http.StatusBadRequest)
 		return
 	}
 
-	// Validate the ID token and extract claims
+	// Validate the ID token and get claims
 	claims, err := a.validateIDToken(idTokenStr)
 	if err != nil {
 		log.Printf("Failed to validate ID token: %v", err)
-		http.Error(w, "Failed to validate ID token", http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Failed to validate ID token: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Extract user information from claims
+	// Get userID (sub) from claims
 	userID, ok := claims["sub"].(string)
 	if !ok {
 		http.Error(w, "Invalid user ID in ID token", http.StatusBadRequest)
 		return
 	}
 
-	email, ok := claims["email"].(string)
-	if !ok {
-		http.Error(w, "Invalid email in ID token", http.StatusBadRequest)
-		return
+	// Attempt to get email from claims
+	email, emailPresent := claims["email"].(string)
+
+	// If no email in this login attempt, try to fetch from Firestore (assuming a previous login occurred)
+	firestoreClient := a.FirestoreClient
+	if !emailPresent || email == "" {
+		docRef := firestoreClient.Collection("parents").Doc(userID)
+		doc, err := docRef.Get(context.Background())
+		if err != nil {
+			if status.Code(err) == codes.NotFound {
+				// This is first login but no email provided by Apple => fail
+				http.Error(w, "Email not provided by Apple and user does not exist", http.StatusBadRequest)
+				return
+			} else {
+				http.Error(w, "Error checking user record in Firestore", http.StatusInternalServerError)
+				return
+			}
+		}
+
+		data := doc.Data()
+		storedEmail, ok := data["email"].(string)
+		if !ok || storedEmail == "" {
+			// User has logged in before but no email stored => fail
+			http.Error(w, "User record found but no email stored", http.StatusBadRequest)
+			return
+		}
+		email = storedEmail
 	}
 
 	emailVerified, _ := claims["email_verified"].(bool)
 	if !emailVerified {
 		log.Println("Email not verified")
+		// Optionally handle unverified emails differently if required
 	}
 
-	// Note: Apple does not provide a picture URL
+	// Apple doesn't provide a picture
 	pictureURL := ""
 
-	// Generate a JWT token for your app
+	// Create your own JWT for the user
 	tokenClaims := jwt.MapClaims{
 		"user_id": userID,
 		"email":   email,
-		"exp":     time.Now().Add(7 * 24 * time.Hour).Unix(), // Token expires in 7 days
+		"exp":     time.Now().Add(7 * 24 * time.Hour).Unix(),
 	}
 
 	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, tokenClaims)
-
-	// Use the secret key
 	signedToken, err := jwtToken.SignedString([]byte(a.SecretKey))
 	if err != nil {
 		log.Printf("Failed to sign JWT token: %v", err)
@@ -120,16 +155,13 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use the existing Firestore client from App
-	firestoreClient := a.FirestoreClient
-
-	// Reference to the parent's document
+	// Check if user exists in Firestore
 	docRef := firestoreClient.Collection("parents").Doc(userID)
 	doc, err := docRef.Get(context.Background())
 
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
-			// User doesn't exist, create a new document
+			// New user
 			_, err = docRef.Set(context.Background(), map[string]interface{}{
 				"user_id":             userID,
 				"email":               email,
@@ -149,7 +181,7 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		// User exists, optionally update tokens if they have changed
+		// Existing user, update as needed
 		data := doc.Data()
 		needsUpdate := false
 		updates := []firestore.Update{}
@@ -166,12 +198,10 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 			updates = append(updates, firestore.Update{Path: "expiry", Value: token.Expiry})
 			needsUpdate = true
 		}
-		// Update name if it has changed
 		if data["name"] != name {
 			updates = append(updates, firestore.Update{Path: "name", Value: name})
 			needsUpdate = true
 		}
-		// Update picture URL if it has changed
 		if data["picture"] != pictureURL {
 			updates = append(updates, firestore.Update{Path: "picture", Value: pictureURL})
 			needsUpdate = true
@@ -190,43 +220,61 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("OAuthCallbackHandler: User authenticated: %s (%s)", userID, email)
 	log.Printf("OAuthCallbackHandler: Redirecting to dashboard")
 
-	// Redirect to the React app's dashboard route with the token in the URL fragment
+	// Redirect to your app's dashboard
 	redirectURL := fmt.Sprintf("%s/auth-redirect#%s", "https://lee-tutoring-webapp.web.app", signedToken)
 	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }
 
 // Helper functions
-
 func (a *App) generateClientSecret() (string, error) {
-	privateKeyData := a.Config.APPLE_PRIVATE_KEY
 	teamID := a.Config.APPLE_TEAM_ID
 	clientID := a.Config.APPLE_CLIENT_ID
 	keyID := a.Config.APPLE_KEY_ID
 
-	block, _ := pem.Decode([]byte(privateKeyData))
+	// Retrieve the raw PEM-encoded private key from the environment variable
+	pemEncodedKey := os.Getenv("APPLE_PRIVATE_KEY")
+	if pemEncodedKey == "" {
+		return "", fmt.Errorf("APPLE_PRIVATE_KEY environment variable is not set")
+	}
+
+	// Decode the PEM block
+	block, _ := pem.Decode([]byte(pemEncodedKey))
 	if block == nil {
-		return "", fmt.Errorf("failed to parse PEM block containing the private key")
+		log.Fatalf("Failed to parse PEM block from APPLE_PRIVATE_KEY")
 	}
 
-	ecdsaPrivateKey, err := x509.ParseECPrivateKey(block.Bytes)
+	// Parse the PKCS8 private key
+	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse EC private key: %v", err)
+		log.Printf("ParsePKCS8PrivateKey error: %v\nPEM Block Type: %s\n", err, block.Type)
+		return "", fmt.Errorf("failed to parse PKCS8 private key: %v", err)
 	}
 
+	// Assert that the key is of type *ecdsa.PrivateKey
+	ecdsaPrivateKey, ok := key.(*ecdsa.PrivateKey)
+	if !ok {
+		log.Printf("Private key type assertion failed; got type %T\n", key)
+		return "", fmt.Errorf("private key is not an ECDSA key")
+	}
+
+	// Define the JWT claims
 	now := time.Now()
 	claims := jwt.MapClaims{
 		"iss": teamID,
 		"iat": now.Unix(),
-		"exp": now.Add(time.Hour).Unix(),
+		"exp": now.Add(180 * 24 * time.Hour).Unix(), // Set to 6 months as per Apple's guidelines
 		"aud": "https://appleid.apple.com",
 		"sub": clientID,
 	}
 
+	// Create the JWT token
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
 	token.Header["kid"] = keyID
 
+	// Sign the token with the ECDSA private key
 	clientSecret, err := token.SignedString(ecdsaPrivateKey)
 	if err != nil {
+		log.Printf("Signing error: %v\n", err)
 		return "", fmt.Errorf("failed to sign client secret: %v", err)
 	}
 
@@ -234,26 +282,21 @@ func (a *App) generateClientSecret() (string, error) {
 }
 
 func (a *App) validateIDToken(idToken string) (jwt.MapClaims, error) {
-	// Fetch Apple's public keys
 	keySet, err := jwk.Fetch(context.Background(), "https://appleid.apple.com/auth/keys")
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch Apple's public keys: %v", err)
 	}
 
-	// Parse the ID token without verification to extract the header
 	token, err := jwt.Parse(idToken, func(token *jwt.Token) (interface{}, error) {
-		// Check the signing method
 		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 
-		// Get the key ID from the token header (kid)
 		kid, ok := token.Header["kid"].(string)
 		if !ok {
 			return nil, fmt.Errorf("no kid found in token header")
 		}
 
-		// Find the corresponding public key in Apple's keys
 		key, found := keySet.LookupKeyID(kid)
 		if !found {
 			return nil, fmt.Errorf("public key not found for kid: %s", kid)
@@ -279,7 +322,6 @@ func (a *App) validateIDToken(idToken string) (jwt.MapClaims, error) {
 		return nil, fmt.Errorf("invalid token claims")
 	}
 
-	// Verify audience and issuer
 	if claims["aud"] != a.Config.APPLE_CLIENT_ID {
 		return nil, fmt.Errorf("invalid audience in ID token")
 	}
