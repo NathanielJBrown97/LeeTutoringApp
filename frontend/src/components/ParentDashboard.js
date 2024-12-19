@@ -600,7 +600,7 @@ const ParentDashboard = () => {
                     return (
                       <ListItem key={index} sx={{ paddingLeft: 0 }}>
                         <ListItemText
-                          primary={goal.College || 'N/A'}
+                          primary={goal.university || goal.College || 'N/A'}
                           secondary={secondaryText || 'No percentiles available.'}
                         />
                       </ListItem>

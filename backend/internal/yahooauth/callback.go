@@ -18,16 +18,18 @@ import (
 )
 
 func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
-	// Retrieve the state from the cookie
+	log.Println("OAuthCallbackHandler triggered")
+
 	oauthStateCookie, err := r.Cookie("oauthstate")
 	if err != nil {
+		log.Printf("Error retrieving oauthstate cookie: %v", err)
 		http.Error(w, "No OAuth state cookie", http.StatusBadRequest)
 		return
 	}
 
-	// Compare the state parameter
 	state := r.URL.Query().Get("state")
 	if state != oauthStateCookie.Value {
+		log.Printf("Invalid OAuth state: expected %s, got %s", oauthStateCookie.Value, state)
 		http.Error(w, "Invalid OAuth state", http.StatusBadRequest)
 		return
 	}

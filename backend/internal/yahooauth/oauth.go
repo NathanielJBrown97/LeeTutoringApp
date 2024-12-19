@@ -1,5 +1,3 @@
-// backend/internal/yahooauth/oauth.go
-
 package yahooauth
 
 import (
@@ -29,7 +27,7 @@ func generateStateOauthCookie(w http.ResponseWriter) string {
 		HttpOnly: true,
 		Secure:   true,
 		Path:     "/",
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteNoneMode,
 	}
 	http.SetCookie(w, &cookie)
 
@@ -37,18 +35,11 @@ func generateStateOauthCookie(w http.ResponseWriter) string {
 }
 
 func (a *App) OAuthHandler(w http.ResponseWriter, r *http.Request) {
-	// Log that the OAuthHandler was triggered
 	log.Println("Yahoo OAuthHandler triggered")
 
-	// Generate a secure state and store it in a cookie
 	state := generateStateOauthCookie(w)
-
-	// Generate the OAuth URL for Yahoo
 	url := a.OAuthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.SetAuthURLParam("nonce", state))
 
-	// Log the generated URL
-	log.Println("Redirecting to:", url)
-
-	// Redirect the user to the Yahoo OAuth login page
+	log.Println("Redirecting to Yahoo OAuth URL:", url)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
