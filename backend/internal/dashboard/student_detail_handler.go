@@ -1,5 +1,3 @@
-// backend/internal/dashboard/student_detail_handler.go
-
 package dashboard
 
 import (
@@ -78,7 +76,7 @@ func (a *App) StudentDetailHandler(w http.ResponseWriter, r *http.Request) {
 		ID: studentID,
 	}
 
-	// Fetch 'personal' field and extract specific fields
+	// Personal Data
 	if personalData, ok := studentDoc.Data()["personal"].(map[string]interface{}); ok {
 		personalResponse := make(map[string]interface{})
 
@@ -106,7 +104,7 @@ func (a *App) StudentDetailHandler(w http.ResponseWriter, r *http.Request) {
 		studentData.Personal = make(map[string]interface{})
 	}
 
-	// Fetch 'business' field and extract specific fields
+	// Business Data
 	if businessData, ok := studentDoc.Data()["business"].(map[string]interface{}); ok {
 		businessResponse := make(map[string]interface{})
 
@@ -137,7 +135,7 @@ func (a *App) StudentDetailHandler(w http.ResponseWriter, r *http.Request) {
 		studentData.Business = make(map[string]interface{})
 	}
 
-	// Fetch 'Homework Completion' subcollection
+	// Homework Completion Subcollection
 	homeworkCompletionDocs, err := studentDoc.Ref.Collection("Homework Completion").Documents(ctx).GetAll()
 	if err != nil {
 		log.Printf("Error fetching 'Homework Completion' subcollection: %v", err)
@@ -147,16 +145,16 @@ func (a *App) StudentDetailHandler(w http.ResponseWriter, r *http.Request) {
 		for _, doc := range homeworkCompletionDocs {
 			data := doc.Data()
 			homeworkData := map[string]interface{}{
-				"id":         doc.Ref.ID,                  // Document ID (date format)
-				"date":       data["date"],                // Date field
-				"percentage": data["percentage_complete"], // Percentage field
+				"id":         doc.Ref.ID,
+				"date":       data["date"],
+				"percentage": data["percentage_complete"],
 			}
 			homeworkCompletion = append(homeworkCompletion, homeworkData)
 		}
 		studentData.HomeworkCompletion = homeworkCompletion
 	}
 
-	// Fetch 'Test Data' subcollection
+	// Test Data Subcollection
 	testDataDocs, err := studentDoc.Ref.Collection("Test Data").Documents(ctx).GetAll()
 	if err != nil {
 		log.Printf("Error fetching 'Test Data' subcollection: %v", err)
@@ -165,14 +163,36 @@ func (a *App) StudentDetailHandler(w http.ResponseWriter, r *http.Request) {
 		var testData []map[string]interface{}
 		for _, doc := range testDataDocs {
 			data := doc.Data()
-			data["id"] = doc.Ref.ID // Include document ID
+			data["id"] = doc.Ref.ID
 
-			// Include 'ACT' and 'SAT' subdocuments if they exist within the document data
-			if actData, ok := data["ACT"].(map[string]interface{}); ok {
-				data["ACT"] = actData
+			// Convert ACT_Scores map into an array if present
+			if actScoresMap, ok := data["ACT_Scores"].(map[string]interface{}); ok {
+				// The frontend expects them in a specific order:
+				// For ACT_Scores, we have 'ACT_Total', 'English', 'Math', 'Reading', 'Science'
+				// The frontend code is indexing them in a known order. Let's assume we provide them in:
+				// [English, Math, Reading, Science, ACT_Total]
+				actArray := []interface{}{
+					actScoresMap["English"],
+					actScoresMap["Math"],
+					actScoresMap["Reading"],
+					actScoresMap["Science"],
+					actScoresMap["ACT_Total"],
+				}
+				data["ACT_Scores"] = actArray
 			}
-			if satData, ok := data["SAT"].(map[string]interface{}); ok {
-				data["SAT"] = satData
+
+			// Convert SAT_Scores map into an array if present
+			if satScoresMap, ok := data["SAT_Scores"].(map[string]interface{}); ok {
+				// For SAT_Scores, we have 'EBRW', 'Math', 'Reading', 'SAT_Total', 'Writing'
+				// The frontend expects them as: [EBRW, Math, Reading, Writing, SAT_Total]
+				satArray := []interface{}{
+					satScoresMap["EBRW"],
+					satScoresMap["Math"],
+					satScoresMap["Reading"],
+					satScoresMap["Writing"],
+					satScoresMap["SAT_Total"],
+				}
+				data["SAT_Scores"] = satArray
 			}
 
 			testData = append(testData, data)
@@ -180,7 +200,7 @@ func (a *App) StudentDetailHandler(w http.ResponseWriter, r *http.Request) {
 		studentData.TestData = testData
 	}
 
-	// Fetch 'Test Dates' subcollection
+	// Test Dates Subcollection
 	testDatesDocs, err := studentDoc.Ref.Collection("Test Dates").Documents(ctx).GetAll()
 	if err != nil {
 		log.Printf("Error fetching 'Test Dates' subcollection: %v", err)
@@ -189,13 +209,13 @@ func (a *App) StudentDetailHandler(w http.ResponseWriter, r *http.Request) {
 		var testDates []map[string]interface{}
 		for _, doc := range testDatesDocs {
 			data := doc.Data()
-			data["id"] = doc.Ref.ID // Include document ID
+			data["id"] = doc.Ref.ID
 			testDates = append(testDates, data)
 		}
 		studentData.TestDates = testDates
 	}
 
-	// Fetch 'Goals' subcollection
+	// Goals Subcollection
 	goalsDocs, err := studentDoc.Ref.Collection("Goals").Documents(ctx).GetAll()
 	if err != nil {
 		log.Printf("Error fetching 'Goals' subcollection: %v", err)
@@ -204,7 +224,7 @@ func (a *App) StudentDetailHandler(w http.ResponseWriter, r *http.Request) {
 		var goals []map[string]interface{}
 		for _, doc := range goalsDocs {
 			data := doc.Data()
-			data["id"] = doc.Ref.ID // Include document ID
+			data["id"] = doc.Ref.ID
 			goals = append(goals, data)
 		}
 		studentData.Goals = goals

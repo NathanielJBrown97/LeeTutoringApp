@@ -17,7 +17,7 @@ func (a *App) OAuthHandler(w http.ResponseWriter, r *http.Request) {
 		oauth2.SetAuthURLParam("response_type", "code id_token"),
 		oauth2.SetAuthURLParam("response_mode", "form_post"),
 		oauth2.SetAuthURLParam("scope", "name email"),
-		oauth2.SetAuthURLParam("nonce", "random_nonce"), // Replace with a securely generated nonce
+		oauth2.SetAuthURLParam("nonce", "random_nonce"),
 	)
 
 	// Log the generated URL

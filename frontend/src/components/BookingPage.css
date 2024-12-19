@@ -1,57 +1,56 @@
 /* src/components/BookingPage.css */
 
 .booking-page-container {
-    max-width: 800px;
-    margin: 50px auto;
-    padding: 20px;
-  }
-  
-  .back-button {
-    margin-bottom: 20px;
-    padding: 10px 20px;
-    cursor: pointer;
-  }
-  
-  .students-list {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-  
-  .student-card {
-    border: 1px solid #ccc;
-    padding: 20px;
-  }
-  
-  .student-card h2 {
-    margin-top: 0;
-  }
-  
-  .student-card ul {
-    list-style-type: disc;
-    margin-left: 20px;
-  }
-  
-  .tutor-section {
-    margin-bottom: 15px;
-  }
-  
-  .booking-buttons {
-    display: flex;
-    gap: 10px;
-    margin-top: 5px;
-  }
-  
-  .booking-button {
-    display: inline-block;
-    padding: 8px 12px;
-    background-color: #007bff; /* Adjust color as needed */
-    color: #fff;
-    text-decoration: none;
-    border-radius: 4px;
-  }
-  
-  .booking-button:hover {
-    background-color: #0056b3; /* Adjust hover color as needed */
-  }
-  
+  max-width: 800px;
+  margin: 50px auto;
+  padding: 20px;
+}
+
+.back-button {
+  margin-bottom: 20px;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+
+.students-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.student-card {
+  border: 1px solid #ccc;
+  padding: 20px;
+}
+
+.student-card h2 {
+  margin-top: 0;
+}
+
+.student-card ul {
+  list-style-type: disc;
+  margin-left: 20px;
+}
+
+.tutor-section {
+  margin-bottom: 15px;
+}
+
+.booking-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 5px;
+}
+
+.booking-button {
+  display: inline-block;
+  padding: 8px 12px;
+  background-color: #007bff; /* Adjust color as needed */
+  color: #fff;
+  text-decoration: none;
+  border-radius: 4px;
+}
+
+.booking-button:hover {
+  background-color: #0056b3; /* Adjust hover color as needed */
+}

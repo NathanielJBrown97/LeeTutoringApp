@@ -4,23 +4,134 @@ import React, { useEffect, useState, useContext } from 'react';
 import { API_BASE_URL } from '../config';
 import { AuthContext } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import './ParentDashboard.css';
+import {
+  Container,
+  AppBar,
+  Toolbar,
+  Typography,
+  Button,
+  Box,
+  Grid,
+  Select,
+  MenuItem,
+  Paper,
+  List,
+  ListItem,
+  ListItemText,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  CircularProgress,
+  Divider,
+  Tabs,
+  Tab,
+  Avatar,
+} from '@mui/material';
+import { styled } from '@mui/system';
+
+const navy = '#001F54';
+const cream = '#FFF8E1';
+const backgroundGray = '#f9f9f9';
+const lightGray = '#f0f0f0';
+
+const StyledAppBar = styled(AppBar)({
+  backgroundColor: navy,
+});
+
+const HeroSection = styled(Box)({
+  borderRadius: '8px',
+  padding: '40px',
+  marginTop: '24px',
+  marginBottom: '24px',
+  color: '#fff',
+  background: `linear-gradient(to bottom right, ${navy}, #003f88)`,
+  boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
+});
+
+const ContentWrapper = styled(Box)({
+  backgroundColor: backgroundGray,
+  borderRadius: '16px',
+  padding: '24px',
+  marginBottom: '40px',
+  boxShadow: '0 6px 20px rgba(0,0,0,0.1)',
+});
+
+const SectionContainer = styled(Paper)({
+  padding: '24px',
+  borderRadius: '16px',
+  backgroundColor: '#fff',
+  boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+});
+
+const SectionTitle = styled(Typography)({
+  marginBottom: '16px',
+  fontWeight: 600,
+  color: navy,
+});
+
+function TabPanel(props) {
+  const { children, value, index, ...other } = props;
+  return (
+    <Box
+      role="tabpanel"
+      hidden={value !== index}
+      {...other}
+      sx={{ marginTop: '16px' }}
+    >
+      {value === index && children}
+    </Box>
+  );
+}
 
 const ParentDashboard = () => {
   const authState = useContext(AuthContext);
-  const [associatedStudents, setAssociatedStudents] = useState([]); // Array of student IDs
-  const [studentsInfo, setStudentsInfo] = useState([]); // Array of student objects with id and name
+  const [associatedStudents, setAssociatedStudents] = useState([]);
   const [selectedStudentID, setSelectedStudentID] = useState(null);
   const [studentData, setStudentData] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [parentName, setParentName] = useState('Parent');
+  const [parentPicture, setParentPicture] = useState(null);
+  const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Fetch associated students when the component mounts
+  // Fetch Parent Data
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      // Handle unauthenticated state
+      navigate('/');
+      return;
+    }
+
+    fetch(`${API_BASE_URL}/api/parent`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('Failed to fetch parent data');
+        }
+        return response.json();
+      })
+      .then((data) => {
+        setParentName(data.name || 'Parent');
+        setParentPicture(data.picture || null);
+      })
+      .catch((error) => {
+        console.error('Error fetching parent data:', error);
+        // Optionally, set default values or handle error state
+      });
+  }, [navigate]);
+
   useEffect(() => {
     const token = localStorage.getItem('authToken');
     fetchAssociatedStudents(token);
-  }, [navigate]);
+  }, []);
 
   const fetchAssociatedStudents = (token) => {
     fetch(`${API_BASE_URL}/api/associated-students`, {
@@ -29,92 +140,22 @@ const ParentDashboard = () => {
         Authorization: `Bearer ${token}`,
       },
     })
-      .then(async (response) => {
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Error ${response.status}: ${errorText}`);
-        }
-        return response.json();
-      })
+      .then((res) => res.json())
       .then((data) => {
-        if (data.associatedStudents && data.associatedStudents.length > 0) {
-          setAssociatedStudents(data.associatedStudents);
-          // Fetch names of associated students
-          fetchStudentsInfo(data.associatedStudents);
-        } else {
-          attemptAutomaticAssociation(token);
+        setAssociatedStudents(data.associatedStudents);
+        // Parse the query parameter
+        const params = new URLSearchParams(window.location.search);
+        const queriedStudentID = params.get('studentID');
+
+        if (queriedStudentID && data.associatedStudents.includes(queriedStudentID)) {
+          setSelectedStudentID(queriedStudentID);
+        } else if (data.associatedStudents.length > 0) {
+          setSelectedStudentID(data.associatedStudents[0]);
         }
       })
-      .catch((error) => {
-        console.error('Error fetching associated students:', error);
-        setLoading(false);
-      });
+      .catch((err) => console.error(err));
   };
 
-  const attemptAutomaticAssociation = (token) => {
-    fetch(`${API_BASE_URL}/api/attemptAutomaticAssociation`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          navigate('/studentintake');
-          return;
-        }
-        return response.json();
-      })
-      .then((data) => {
-        if (data.associatedStudents && data.associatedStudents.length > 0) {
-          setAssociatedStudents(data.associatedStudents);
-          // Fetch names of associated students
-          fetchStudentsInfo(data.associatedStudents);
-        } else {
-          navigate('/studentintake');
-        }
-      })
-      .catch((error) => {
-        console.error('Error during automatic association:', error);
-        navigate('/studentintake');
-      });
-  };
-
-  const fetchStudentsInfo = (studentIDs) => {
-    const token = localStorage.getItem('authToken');
-    const fetchPromises = studentIDs.map((studentID) =>
-      fetch(`${API_BASE_URL}/api/students/${studentID}`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-        .then(async (response) => {
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Error ${response.status}: ${errorText}`);
-          }
-          return response.json();
-        })
-        .then((data) => ({
-          id: studentID,
-          name: data.personal.name || studentID, // Use ID if name is not available
-        }))
-    );
-
-    Promise.all(fetchPromises)
-      .then((students) => {
-        setStudentsInfo(students);
-        setSelectedStudentID(students[0].id);
-        setLoading(false);
-      })
-      .catch((error) => {
-        console.error('Error fetching students info:', error);
-        setLoading(false);
-      });
-  };
-
-  // Fetch detailed student data when a student is selected
   useEffect(() => {
     if (selectedStudentID) {
       const token = localStorage.getItem('authToken');
@@ -125,19 +166,19 @@ const ParentDashboard = () => {
           Authorization: `Bearer ${token}`,
         },
       })
-        .then(async (response) => {
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Error ${response.status}: ${errorText}`);
+        .then(async (res) => {
+          if (!res.ok) {
+            throw new Error('Failed to fetch student data');
           }
-          return response.json();
+          return res.json();
         })
         .then((data) => {
+          console.log('Fetched Student Data:', data); // Debugging line
           setStudentData(data);
           setLoading(false);
         })
-        .catch((error) => {
-          console.error('Error fetching student details:', error);
+        .catch((err) => {
+          console.error(err);
           setLoading(false);
         });
     }
@@ -146,407 +187,469 @@ const ParentDashboard = () => {
   const handleSignOut = () => {
     localStorage.removeItem('authToken');
     authState.updateToken(null);
-    window.location.href = '/';
+    navigate('/');
   };
 
   const handleStudentChange = (event) => {
-    setSelectedStudentID(event.target.value);
+    const newStudentID = event.target.value;
+    setSelectedStudentID(newStudentID);
+    navigate(`/parentdashboard?studentID=${newStudentID}`);
   };
 
-  const handleBookMeeting = () => {
-    navigate('/booking');
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
   };
 
-  const handleTabChange = (tabName) => {
-    setActiveTab(tabName);
+  // Navigation to Booking Page with current studentID
+  const handleNavigateToBooking = () => {
+    if (selectedStudentID) {
+      navigate(`/booking?studentID=${selectedStudentID}`);
+    } else {
+      navigate('/booking');
+    }
   };
 
-  if (loading) {
-    return <div className="loading">Loading Dashboard...</div>;
-  }
-
-  if (!studentData) {
+  if (loading || !studentData) {
     return (
-      <div className="dashboard-container">
-        <nav className="navbar">
-          <h1 className="logo">Agora Parent Dashboard</h1>
-          <div className="nav-buttons">
-            <button onClick={handleBookMeeting} className="nav-button">
-              Book a Meeting
-            </button>
-            <button onClick={handleSignOut} className="nav-button signout">
-              Sign Out
-            </button>
-          </div>
-        </nav>
-        <div className="content">
-          <div className="welcome-section">
-            <p>
-              Welcome, <strong>{authState.user.email}</strong>!
-            </p>
-            <p>Select a student to view their details.</p>
-            <div className="student-selector">
-              <label htmlFor="student-select">Select Student:</label>
-              <select
-                id="student-select"
-                onChange={handleStudentChange}
-                value={selectedStudentID}
-              >
-                {studentsInfo.map((student) => (
-                  <option key={student.id} value={student.id}>
-                    {student.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
+      <Box display="flex" justifyContent="center" alignItems="center" height="100vh">
+        <CircularProgress />
+      </Box>
     );
   }
 
-  // Extract student information
-  const personalInfo = studentData.personal || {};
-  const businessInfo = studentData.business || {};
-  const goals = studentData.goals || [];
-  const testDates = studentData.testDates || [];
-  const homeworkCompletion = studentData.homeworkCompletion || [];
+  // Filter and sort test dates for upcoming tests
+  const testDates = (studentData.testDates || [])
+    .filter((test) => {
+      const testDateStr = test.test_date;
+      if (!testDateStr) return false;
+      const testDate = new Date(testDateStr);
+      if (isNaN(testDate.getTime())) return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return testDate >= today;
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.test_date);
+      const dateB = new Date(b.test_date);
+      return dateA - dateB;
+    });
+
   const testData = studentData.testData || [];
 
-  // Format lifetime_hours
-  const formattedLifetimeHours =
-    businessInfo.lifetime_hours !== undefined
-      ? parseFloat(businessInfo.lifetime_hours).toFixed(2)
-      : 'N/A';
+  // Separate SAT/PSAT and ACT tests
+  const satTests = testData.filter((t) => {
+    const upperTest = (t.test || '').toUpperCase();
+    return upperTest.includes('SAT') || upperTest.includes('PSAT');
+  });
 
-  // Get selected student's name
-  const selectedStudent = studentsInfo.find((s) => s.id === selectedStudentID);
-  const selectedStudentName = selectedStudent ? selectedStudent.name : 'Student';
+  const actTests = testData.filter((t) => {
+    const upperTest = (t.test || '').toUpperCase();
+    return upperTest.includes('ACT');
+  });
+
+  const tableCellProps = {
+    sx: { verticalAlign: 'top' },
+  };
+
+  const renderSATScores = (testDoc) => {
+    let EBRW = '';
+    let Math = '';
+    let Reading = '';
+    let Writing = '';
+    let SAT_Total = '';
+
+    if (Array.isArray(testDoc.SAT_Scores) && testDoc.SAT_Scores.length > 0) {
+      EBRW = testDoc.SAT_Scores[0] || '';
+      Math = testDoc.SAT_Scores[1] || '';
+      Reading = testDoc.SAT_Scores[2] || '';
+      Writing = testDoc.SAT_Scores[3] || '';
+      SAT_Total = testDoc.SAT_Scores[4] || '';
+    } else if (Array.isArray(testDoc.SAT) && testDoc.SAT.length > 0) {
+      EBRW = testDoc.SAT[0] || '';
+      Math = testDoc.SAT[1] || '';
+      Reading = testDoc.SAT[2] || '';
+      Writing = testDoc.SAT[3] || '';
+      SAT_Total = testDoc.SAT[4] || '';
+    }
+
+    return { EBRW, Math, Reading, Writing, SAT_Total };
+  };
+
+  const renderACTScores = (testDoc) => {
+    let English = '';
+    let MathVal = '';
+    let Reading = '';
+    let Science = '';
+    let ACT_Total = '';
+
+    if (Array.isArray(testDoc.ACT_Scores) && testDoc.ACT_Scores.length > 0) {
+      English = testDoc.ACT_Scores[0] || '';
+      MathVal = testDoc.ACT_Scores[1] || '';
+      Reading = testDoc.ACT_Scores[2] || '';
+      Science = testDoc.ACT_Scores[3] || '';
+      ACT_Total = testDoc.ACT_Scores[4] || '';
+    } else if (Array.isArray(testDoc.ACT) && testDoc.ACT.length > 0) {
+      English = testDoc.ACT[0] || '';
+      MathVal = testDoc.ACT[1] || '';
+      Reading = testDoc.ACT[2] || '';
+      Science = testDoc.ACT[3] || '';
+      ACT_Total = testDoc.ACT[4] || '';
+    }
+
+    return { English, Math: MathVal, Reading, Science, ACT_Total };
+  };
 
   return (
-    <div className="dashboard-container">
-      <nav className="navbar">
-        <h1 className="logo">Agora Parent Dashboard</h1>
-        <div className="nav-buttons">
-          <button onClick={handleBookMeeting} className="nav-button">
-            Book a Meeting
-          </button>
-          <button onClick={handleSignOut} className="nav-button signout">
-            Sign Out
-          </button>
-        </div>
-      </nav>
-      <div className="content">
-        <div className="student-selector">
-          <label htmlFor="student-select">Select Student:</label>
-          <select
-            id="student-select"
-            onChange={handleStudentChange}
-            value={selectedStudentID}
+    <Box sx={{ backgroundColor: '#fafafa', minHeight: '100vh' }}>
+      <StyledAppBar position="static">
+        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
+          {/* Left Side: Welcome Message and Avatar */}
+          <Box display="flex" alignItems="center" gap="16px">
+            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+              Welcome, {parentName}!
+            </Typography>
+            <Avatar
+              src={parentPicture || undefined}
+              alt={parentName}
+              sx={{ bgcolor: parentPicture ? 'transparent' : '#003f88', color: '#fff' }}
+            >
+              {!parentPicture && parentName.charAt(0).toUpperCase()}
+            </Avatar>
+          </Box>
+
+          {/* Right Side: Navigation Buttons */}
+          <Box display="flex" alignItems="center" gap="16px">
+            <Button
+              color="inherit"
+              onClick={handleNavigateToBooking}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 'bold',
+              }}
+            >
+              Book With A Tutor
+            </Button>
+            <Button
+              color="inherit"
+              onClick={handleSignOut}
+              sx={{ textTransform: 'none', fontWeight: 'bold' }}
+            >
+              Sign Out
+            </Button>
+          </Box>
+        </Toolbar>
+      </StyledAppBar>
+
+      <Container maxWidth="xl">
+        <HeroSection>
+          <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap">
+            <Box>
+              <Typography variant="h3" sx={{ fontWeight: 700, marginBottom: '8px' }}>
+                {studentData.personal?.name || 'Student'}
+              </Typography>
+              <Typography variant="h6" sx={{ opacity: 0.9 }}>
+                Manage performance, view upcoming tests, track homework completion, and set goals.
+              </Typography>
+            </Box>
+
+            <Box mt={{ xs: 2, md: 0 }}>
+              <Select
+                value={selectedStudentID}
+                onChange={handleStudentChange}
+                variant="outlined"
+                sx={{
+                  minWidth: '200px',
+                  backgroundColor: '#fff',
+                  borderRadius: '8px',
+                  fontWeight: 500,
+                }}
+              >
+                {associatedStudents.map((student) => (
+                  <MenuItem key={student} value={student}>
+                    {student}
+                  </MenuItem>
+                ))}
+              </Select>
+            </Box>
+          </Box>
+        </HeroSection>
+
+        <ContentWrapper>
+          <Tabs
+            value={activeTab}
+            onChange={handleTabChange}
+            textColor="primary"
+            indicatorColor="primary"
+            variant="scrollable"
+            scrollButtons="auto"
+            sx={{ marginBottom: '16px' }}
           >
-            {studentsInfo.map((student) => (
-              <option key={student.id} value={student.id}>
-                {student.name}
-              </option>
-            ))}
-          </select>
-        </div>
+            <Tab label="Overview" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
+            <Tab label="School Goals" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
+            <Tab label="Student Profile" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
+          </Tabs>
 
-        <h2 className="student-name">Viewing: {selectedStudentName}</h2>
-
-        <div className="tabs">
-          <button
-            className={`tab-button ${activeTab === 'overview' ? 'active' : ''}`}
-            onClick={() => handleTabChange('overview')}
-          >
-            Overview
-          </button>
-          <button
-            className={`tab-button ${activeTab === 'homework' ? 'active' : ''}`}
-            onClick={() => handleTabChange('homework')}
-          >
-            Homework
-          </button>
-          <button
-            className={`tab-button ${activeTab === 'tests' ? 'active' : ''}`}
-            onClick={() => handleTabChange('tests')}
-          >
-            Tests
-          </button>
-        </div>
-
-        <div className="tab-content">
-          {activeTab === 'overview' && (
-            <div className="overview-tab">
-              <h2>Student Overview</h2>
-              <table className="info-table">
-                <tbody>
-                  <tr>
-                    <th colSpan="2">Personal Information</th>
-                  </tr>
-                  <tr>
-                    <td>Name</td>
-                    <td>{personalInfo.name || 'N/A'}</td>
-                  </tr>
-                  <tr>
-                    <td>Accommodations</td>
-                    <td>{personalInfo.accommodations || 'N/A'}</td>
-                  </tr>
-                  <tr>
-                    <td>Grade</td>
-                    <td>{personalInfo.grade || 'N/A'}</td>
-                  </tr>
-                  <tr>
-                    <td>High School</td>
-                    <td>{personalInfo.high_school || 'N/A'}</td>
-                  </tr>
-                  <tr>
-                    <th colSpan="2">Business Information</th>
-                  </tr>
-                  <tr>
-                    <td>Lifetime Hours</td>
-                    <td>{formattedLifetimeHours}</td>
-                  </tr>
-                  <tr>
-                    <td>Remaining Hours</td>
-                    <td>{businessInfo.remaining_hours || 'N/A'}</td>
-                  </tr>
-                  <tr>
-                    <td>Registered Tests</td>
-                    <td>{businessInfo.registered_tests || 'N/A'}</td>
-                  </tr>
-                  <tr>
-                    <td>Status</td>
-                    <td>{businessInfo.status || 'N/A'}</td>
-                  </tr>
-                  <tr>
-                    <td>Team Lead</td>
-                    <td>{businessInfo.team_lead || 'N/A'}</td>
-                  </tr>
-                  <tr>
-                    <td>Test Focus</td>
-                    <td>{businessInfo.test_focus || 'N/A'}</td>
-                  </tr>
-                  <tr>
-                    <td>Associated Tutors</td>
-                    <td>
-                      {businessInfo.associated_tutors &&
-                      Array.isArray(businessInfo.associated_tutors) ? (
-                        <ul>
-                          {businessInfo.associated_tutors.map((tutor, index) => (
-                            <li key={index}>{tutor}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        'N/A'
-                      )}
-                    </td>
-                  </tr>
-                  <tr>
-                    <th colSpan="2">Goals</th>
-                  </tr>
-                  {goals.length > 0 ? (
-                    goals.map((goal, index) => (
-                      <React.Fragment key={index}>
-                        <tr>
-                          <td>College</td>
-                          <td>{goal.College || 'N/A'}</td>
-                        </tr>
-                        {goal.ACT_percentiles && (
-                          <>
-                            <tr>
-                              <td>ACT 25th Percentile</td>
-                              <td>{goal.ACT_percentiles[0]}</td>
-                            </tr>
-                            <tr>
-                              <td>ACT 50th Percentile</td>
-                              <td>{goal.ACT_percentiles[1]}</td>
-                            </tr>
-                            <tr>
-                              <td>ACT 75th Percentile</td>
-                              <td>{goal.ACT_percentiles[2]}</td>
-                            </tr>
-                          </>
-                        )}
-                        {goal.SAT_percentiles && (
-                          <>
-                            <tr>
-                              <td>SAT 25th Percentile</td>
-                              <td>{goal.SAT_percentiles[0]}</td>
-                            </tr>
-                            <tr>
-                              <td>SAT 50th Percentile</td>
-                              <td>{goal.SAT_percentiles[1]}</td>
-                            </tr>
-                            <tr>
-                              <td>SAT 75th Percentile</td>
-                              <td>{goal.SAT_percentiles[2]}</td>
-                            </tr>
-                          </>
-                        )}
-                        <tr className="goal-divider">
-                          <td colSpan="2"></td>
-                        </tr>
-                      </React.Fragment>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="2">No goals available.</td>
-                    </tr>
-                  )}
-                  <tr>
-                    <th colSpan="2">Test Dates</th>
-                  </tr>
-                  {testDates.length > 0 ? (
-                    testDates.map((date, index) => (
-                      <React.Fragment key={index}>
-                        <tr>
-                          <td>Test Type</td>
-                          <td>{date['Test Type'] || 'N/A'}</td>
-                        </tr>
-                        <tr>
-                          <td>Test Date</td>
-                          <td>{date['Test Date'] || 'N/A'}</td>
-                        </tr>
-                        <tr>
-                          <td>Registration Deadline</td>
-                          <td>{date['Regular Registration Deadline'] || 'N/A'}</td>
-                        </tr>
-                        <tr>
-                          <td>Late Registration Deadline</td>
-                          <td>{date['Late Registration Deadline'] || 'N/A'}</td>
-                        </tr>
-                        <tr>
-                          <td>Notes</td>
-                          <td>{date['Notes'] || 'N/A'}</td>
-                        </tr>
-                        <tr className="test-date-divider">
-                          <td colSpan="2"></td>
-                        </tr>
-                      </React.Fragment>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="2">No test dates available.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {activeTab === 'homework' && (
-            <div className="homework-tab">
-              <h2>Homework Completion</h2>
-              {homeworkCompletion.length > 0 ? (
-                <table className="info-table">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Percentage Completed</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {homeworkCompletion.map((hw, index) => {
-                      const date = hw.date || hw.id || 'N/A';
-                      const percentage =
-                        hw.percentage !== undefined ? hw.percentage : 'N/A';
-                      let status = 'N/A';
-
-                      if (percentage === 0) {
-                        status = 'Not Completed';
-                      } else if (percentage === 100) {
-                        status = 'Completed';
-                      } else if (percentage > 0 && percentage < 100) {
-                        status = 'Partially Completed';
-                      }
-
-                      return (
-                        <tr key={index}>
-                          <td>{date}</td>
-                          <td>{percentage}%</td>
-                          <td>{status}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              ) : (
-                <p>No homework records available.</p>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'tests' && (
-            <div className="tests-tab">
-              <h2>Test Data</h2>
-              {testData.length > 0 ? (
-                testData.map((test, index) => (
-                  <div key={index} className="test-card">
-                    <h3>{test.id || 'N/A'}</h3>
-                    <p>
-                      <strong>Date:</strong> {test.Date || 'N/A'}
-                    </p>
-                    <p>
-                      <strong>Test:</strong> {test.Test || 'N/A'}
-                    </p>
-                    <p>
-                      <strong>Baseline:</strong>{' '}
-                      {test.Baseline !== undefined ? test.Baseline.toString() : 'N/A'}
-                    </p>
-                    <p>
-                      <strong>Type:</strong> {test.Type || 'N/A'}
-                    </p>
-                    {/* ACT Scores */}
-                    {test.ACT && (
-                      <div>
-                        <h4>ACT Scores</h4>
-                        {test.ACT['ACT Total'] !== undefined && (
-                          <p>
-                            <strong>Total:</strong> {test.ACT['ACT Total']}
-                          </p>
-                        )}
-                        {['English', 'Math', 'Reading', 'Science'].map((section) => (
-                          <p key={section}>
-                            <strong>{section}:</strong>{' '}
-                            {test.ACT[section] !== undefined ? test.ACT[section] : 'N/A'}
-                          </p>
-                        ))}
-                      </div>
+          {/* OVERVIEW TAB */}
+          <TabPanel value={activeTab} index={0}>
+            <Grid container spacing={4}>
+              {/* Upcoming Test Dates */}
+              <Grid item xs={12} md={2}>
+                <SectionContainer>
+                  <SectionTitle variant="h6">Testing Dates</SectionTitle>
+                  <Divider sx={{ marginBottom: '16px' }} />
+                  <List>
+                    {testDates.length > 0 ? (
+                      testDates.map((test, index) => (
+                        <ListItem key={index} sx={{ paddingLeft: 0 }}>
+                          <ListItemText
+                            primary={test.test_date || 'N/A'}
+                            secondary={test.test_type || 'N/A'}
+                          />
+                        </ListItem>
+                      ))
+                    ) : (
+                      <Typography variant="body2" color="textSecondary">
+                        No upcoming tests.
+                      </Typography>
                     )}
-                    {/* SAT Scores */}
-                    {test.SAT && (
-                      <div>
-                        <h4>SAT Scores</h4>
-                        {test.SAT['SAT Total'] !== undefined && (
-                          <p>
-                            <strong>Total:</strong> {test.SAT['SAT Total']}
-                          </p>
+                  </List>
+                </SectionContainer>
+              </Grid>
+
+              {/* Test Scores */}
+              <Grid item xs={12} md={8}>
+                <SectionContainer>
+                  <SectionTitle variant="h6">Test Scores</SectionTitle>
+                  <Divider sx={{ marginBottom: '16px' }} />
+
+                  {/* SAT/PSAT Scores Table */}
+                  <Typography variant="h6" sx={{ fontWeight: 600, marginTop: '16px' }}>
+                    SAT/PSAT Scores
+                  </Typography>
+                  <TableContainer sx={{ marginBottom: '24px' }}>
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 600 }} {...tableCellProps}>Date</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }} {...tableCellProps}>Test (Type)</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }} {...tableCellProps}>EBRW</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }} {...tableCellProps}>Math</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }} {...tableCellProps}>Reading</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }} {...tableCellProps}>Writing</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }} {...tableCellProps}>SAT_Total</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {satTests.length > 0 ? (
+                          satTests.map((testDoc, index) => {
+                            const scores = renderSATScores(testDoc);
+                            return (
+                              <TableRow key={index}>
+                                <TableCell {...tableCellProps}>{testDoc.date || 'N/A'}</TableCell>
+                                <TableCell {...tableCellProps}>
+                                  {(testDoc.test || 'N/A')} ({testDoc.type || 'N/A'})
+                                </TableCell>
+                                <TableCell {...tableCellProps}>{scores.EBRW}</TableCell>
+                                <TableCell {...tableCellProps}>{scores.Math}</TableCell>
+                                <TableCell {...tableCellProps}>{scores.Reading}</TableCell>
+                                <TableCell {...tableCellProps}>{scores.Writing}</TableCell>
+                                <TableCell {...tableCellProps}>{scores.SAT_Total}</TableCell>
+                              </TableRow>
+                            );
+                          })
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={7}>
+                              <Typography variant="body2" color="textSecondary">
+                                No SAT/PSAT tests available.
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
                         )}
-                        {['EBRW', 'Math'].map((section) => (
-                          <p key={section}>
-                            <strong>
-                              {section === 'EBRW'
-                                ? 'Evidence-Based Reading and Writing'
-                                : section}
-                              :
-                            </strong>{' '}
-                            {test.SAT[section] !== undefined ? test.SAT[section] : 'N/A'}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))
-              ) : (
-                <p>No test data available.</p>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+
+                  {/* ACT Scores Table */}
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    ACT Scores
+                  </Typography>
+                  <TableContainer>
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 600 }} {...tableCellProps}>Date</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }} {...tableCellProps}>Test (Type)</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }} {...tableCellProps}>English</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }} {...tableCellProps}>Math</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }} {...tableCellProps}>Reading</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }} {...tableCellProps}>Science</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }} {...tableCellProps}>ACT_Total</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {actTests.length > 0 ? (
+                          actTests.map((testDoc, index) => {
+                            const scores = renderACTScores(testDoc);
+                            return (
+                              <TableRow key={index}>
+                                <TableCell {...tableCellProps}>{testDoc.date || 'N/A'}</TableCell>
+                                <TableCell {...tableCellProps}>
+                                  {(testDoc.test || 'N/A')} ({testDoc.type || 'N/A'})
+                                </TableCell>
+                                <TableCell {...tableCellProps}>{scores.English}</TableCell>
+                                <TableCell {...tableCellProps}>{scores.Math}</TableCell>
+                                <TableCell {...tableCellProps}>{scores.Reading}</TableCell>
+                                <TableCell {...tableCellProps}>{scores.Science}</TableCell>
+                                <TableCell {...tableCellProps}>{scores.ACT_Total}</TableCell>
+                              </TableRow>
+                            );
+                          })
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={7}>
+                              <Typography variant="body2" color="textSecondary">
+                                No ACT tests available.
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </SectionContainer>
+              </Grid>
+
+              {/* Homework Completion */}
+              <Grid item xs={12} md={2}>
+              <SectionContainer>
+                <SectionTitle variant="h6">Homework Completion</SectionTitle>
+                <Divider sx={{ marginBottom: '16px' }} />
+                <List>
+                  {(() => {
+                    // Clone the homeworkCompletion array to avoid mutating the original state
+                    const sortedHomework = [...(studentData.homeworkCompletion || [])].sort((a, b) => {
+                      const dateA = a.date ? new Date(a.date) : new Date(0); // Assign epoch if date is missing
+                      const dateB = b.date ? new Date(b.date) : new Date(0);
+                      return dateB - dateA; // Descending order
+                    });
+
+                    return sortedHomework.length > 0 ? (
+                      sortedHomework.map((hw, index) => {
+                        // Parse the date string into a Date object
+                        const parsedDate = hw.date ? new Date(hw.date) : null;
+
+                        // Format the date for better readability
+                        const formattedDate = parsedDate
+                          ? parsedDate.toLocaleDateString(undefined, {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                            })
+                          : 'N/A';
+
+                        // Validate percentage
+                        const percentage = hw.percentage ? hw.percentage : '0%';
+
+                        return (
+                          <ListItem key={index} sx={{ paddingLeft: 0 }}>
+                            <ListItemText
+                              primary={formattedDate}
+                              secondary={`${percentage}`}
+                            />
+                          </ListItem>
+                        );
+                      })
+                    ) : (
+                      <Typography variant="body2" color="textSecondary">
+                        No homework completion records available.
+                      </Typography>
+                    );
+                  })()}
+                </List>
+              </SectionContainer>
+              </Grid>
+            </Grid>
+          </TabPanel>
+          
+          
+          {/* SCHOOL GOALS TAB */}
+          <TabPanel value={activeTab} index={1}>
+            <SectionContainer>
+              <SectionTitle variant="h6">School Goals</SectionTitle>
+              <Divider sx={{ marginBottom: '16px' }} />
+              <List>
+                {(studentData.goals || []).length > 0 ? (
+                  studentData.goals.map((goal, index) => {
+                    // Initialize an array to hold the percentiles
+                    const percentiles = [];
+
+                    // Check if ACT_percentiles exists and is not 'N/A'
+                    if (goal.ACT_percentiles && goal.ACT_percentiles !== 'N/A') {
+                      percentiles.push(`ACT: ${goal.ACT_percentiles}`);
+                    }
+
+                    // Check if SAT_percentiles exists and is not 'N/A'
+                    if (goal.SAT_percentiles && goal.SAT_percentiles !== 'N/A') {
+                      percentiles.push(`SAT: ${goal.SAT_percentiles}`);
+                    }
+
+                    // Combine the percentiles into a single string separated by commas
+                    const secondaryText = percentiles.join(', ');
+
+                    return (
+                      <ListItem key={index} sx={{ paddingLeft: 0 }}>
+                        <ListItemText
+                          primary={goal.College || 'N/A'}
+                          secondary={secondaryText || 'No percentiles available.'}
+                        />
+                      </ListItem>
+                    );
+                  })
+                ) : (
+                  <Typography variant="body2" color="textSecondary">
+                    No school goals available.
+                  </Typography>
+                )}
+              </List>
+            </SectionContainer>
+          </TabPanel>
+
+
+
+
+          {/* STUDENT PROFILE TAB */}
+          <TabPanel value={activeTab} index={2}>
+            <SectionContainer>
+              <SectionTitle variant="h6">Student Profile</SectionTitle>
+              <Divider sx={{ marginBottom: '16px' }} />
+              <TableContainer>
+                <Table>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
+                      <TableCell>{studentData.personal?.name || 'N/A'}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 600 }}>Grade</TableCell>
+                      <TableCell>{studentData.personal?.grade || 'N/A'}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 600 }}>High School</TableCell>
+                      <TableCell>{studentData.personal?.high_school || 'N/A'}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 600 }}>Accommodations</TableCell>
+                      <TableCell>{studentData.personal?.accommodations || 'N/A'}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </SectionContainer>
+          </TabPanel>
+        </ContentWrapper>
+      </Container>
+    </Box>
   );
 };
 
