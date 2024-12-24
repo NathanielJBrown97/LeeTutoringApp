@@ -1,6 +1,6 @@
 // src/components/SignIn.js
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { API_BASE_URL } from '../config';
 import {
   Box,
@@ -9,19 +9,19 @@ import {
   Typography,
   Stack,
   Button,
-  Container,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import { styled } from '@mui/system';
-import Logo from '../assets/logo.png'; 
+import Logo from '../assets/logo.png';
 import loginImage from '../assets/login.jpg';
 
 // Importing icons from react-icons
-import { FaGoogle, FaMicrosoft, FaFacebook, FaApple } from 'react-icons/fa';
+import { FaGoogle, FaMicrosoft, FaFacebook, FaApple, FaYahoo } from 'react-icons/fa';
 
-// Define custom colors
-const navy = '#001F54';
-const cream = '#FFF8E1';
-const gold = '#FFD700';
+// Brand colors
+const brandBlue = '#0e1027';
+const brandGold = '#b29600';
 
 // Define platform-specific colors
 const platformColors = {
@@ -32,51 +32,102 @@ const platformColors = {
   apple: '#000000',
 };
 
-// Styled components
-const RootContainer = styled(Box)({
-  display: 'flex',
-  height: '100vh',
-  width: '100vw',
-  overflow: 'hidden',
-});
+// =================== STYLED COMPONENTS ===================
 
-const ImageContainer = styled(Box)({
-  flex: 1,
+/**
+ * RootContainer:
+ *  - Desktop: horizontal flex (70% image, 30% sign-in).
+ *  - Mobile: entire background is the image; sign-in is centered.
+ */
+const RootContainer = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  width: '100vw',
+  height: '100vh',
+  margin: 0,
+  padding: 0,
+  overflow: 'hidden', // Lock scrolling
+
+  [theme.breakpoints.down('md')]: {
+    backgroundImage: `url(${loginImage})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+}));
+
+/**
+ * ImageContainer:
+ *  - Desktop only (70% width).
+ *  - Hidden on mobile (md and below).
+ */
+const ImageContainer = styled(Box)(({ theme }) => ({
+  width: '70%',
+  height: '100%',
+  position: 'relative',
   backgroundImage: `url(${loginImage})`,
   backgroundSize: 'cover',
   backgroundPosition: 'center',
   backgroundRepeat: 'no-repeat',
-  position: 'relative',
-});
 
-// Optional: Add a subtle overlay on the image if you want text or branding visible
-const ImageOverlay = styled(Box)({
+  [theme.breakpoints.down('md')]: {
+    display: 'none',
+  },
+}));
+
+/** 
+ * A semi-transparent overlay for the desktop image 
+ */
+const ImageOverlay = styled(Box)(() => ({
   position: 'absolute',
   inset: 0,
-  background: 'rgba(0,0,0,0.3)', // dark semi-transparent overlay
-});
+  background: `${brandBlue}80`, // 50% opacity
+}));
 
+/**
+ * SignInContainer:
+ *  - Desktop: 30% width, light background.
+ *  - Mobile: fills screen w/ transparent background to show the image.
+ */
 const SignInContainer = styled(Box)(({ theme }) => ({
-  flex: 1,
+  width: '30%',
+  height: '100%',
   backgroundColor: '#f9f9f9',
   display: 'flex',
   justifyContent: 'center',
   alignItems: 'center',
-  padding: theme.spacing(4),
+  padding: theme.spacing(2),
+
+  [theme.breakpoints.down('md')]: {
+    width: '100%',
+    height: 'auto',
+    backgroundColor: 'transparent',
+    // Extra bottom padding to avoid iOS bottom bar overlap
+    padding: theme.spacing(2, 2, 6),
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 }));
 
 const StyledCard = styled(Card)(({ theme }) => ({
   width: '100%',
-  maxWidth: '400px',
-  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
+  maxWidth: '350px',
+  margin: 'auto',
+  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
   borderRadius: '16px',
-  backgroundColor: cream,
+  backgroundColor: '#fff',
+
+  [theme.breakpoints.down('sm')]: {
+    maxWidth: '90%',
+  },
 }));
 
-const LogoContainer = styled(Box)(({ theme }) => ({
+const LogoContainer = styled(Box)(() => ({
   display: 'flex',
   justifyContent: 'center',
-  marginBottom: theme.spacing(3),
+  marginBottom: '1rem',
 }));
 
 const StyledButton = styled(Button, {
@@ -88,13 +139,17 @@ const StyledButton = styled(Button, {
   fontSize: '16px',
   fontWeight: 'bold',
   color: '#fff',
-  backgroundColor: navy,
+  backgroundColor: brandBlue,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'flex-start',
   transition: 'background-color 0.3s',
   '&:hover': {
-    backgroundColor: hovercolor,
+    backgroundColor: hovercolor || brandGold,
+  },
+  [theme.breakpoints.down('sm')]: {
+    fontSize: '14px',
+    padding: theme.spacing(1),
   },
 }));
 
@@ -104,29 +159,37 @@ const IconWrapper = styled(Box)(({ theme }) => ({
   alignItems: 'center',
 }));
 
+// =================== MAIN COMPONENT ===================
 const SignIn = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  // Lock scrolling on mount, restore on unmount
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
+  }, []);
+
   // Handler functions
   const handleGoogleLogin = () => {
     window.location.href = `${API_BASE_URL}/internal/googleauth/oauth`;
   };
-
   const handleMicrosoftLogin = () => {
     window.location.href = `${API_BASE_URL}/internal/microsoftauth/oauth`;
   };
-
   const handleYahooLogin = () => {
     window.location.href = `${API_BASE_URL}/internal/yahooauth/oauth`;
   };
-
   const handleFacebookLogin = () => {
     window.location.href = `${API_BASE_URL}/internal/facebookauth/oauth`;
   };
-
   const handleAppleLogin = () => {
     window.location.href = `${API_BASE_URL}/internal/appleauth/oauth`;
   };
 
-  // Platform data (Yahoo without icon)
+  // Platform data (with Yahoo icon)
   const platforms = [
     {
       name: 'Google',
@@ -143,7 +206,7 @@ const SignIn = () => {
     {
       name: 'Yahoo',
       handler: handleYahooLogin,
-      icon: null, // No icon for Yahoo for now
+      icon: <FaYahoo size={24} />,
       hoverColor: platformColors.yahoo,
     },
     {
@@ -162,19 +225,18 @@ const SignIn = () => {
 
   return (
     <RootContainer>
-      {/* Image Section */}
-      <ImageContainer>
-        <ImageOverlay />
-        {/* If you want to add a tagline or logo over the image, you can do so here:
-        <Box position="absolute" bottom={40} left={40} color="#fff">
-          <Typography variant="h3">Empower your learning</Typography>
-        </Box> */}
-      </ImageContainer>
+      {/* Desktop-Only Image Section */}
+      {!isMobile && (
+        <ImageContainer>
+          <ImageOverlay />
+        </ImageContainer>
+      )}
 
       {/* Sign-In Section */}
       <SignInContainer>
         <StyledCard>
           <CardContent>
+            {/* Logo */}
             <LogoContainer>
               <Box
                 component="img"
@@ -185,26 +247,61 @@ const SignIn = () => {
                   height: 80,
                   borderRadius: '50%',
                   objectFit: 'cover',
-                  border: `4px solid ${gold}`,
+                  border: `3px solid ${brandGold}`,
                 }}
               />
             </LogoContainer>
-            <Typography
-              variant="h4"
-              component="h1"
-              align="center"
-              gutterBottom
-              sx={{ color: navy, fontWeight: 'bold', marginBottom: 2 }}
+
+            {/* Fancy heading with gold bars on each side (fixed widths) */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                mb: 3,
+              }}
             >
-              Welcome to Agora
-            </Typography>
+              {/* Left gold bar */}
+              <Box
+                sx={{
+                  width: 80,
+                  height: 4,
+                  backgroundColor: brandGold,
+                  mr: 2,
+                }}
+              />
+              {/* Heading text (no wrapping) */}
+              <Typography
+                variant={isMobile ? 'h5' : 'h4'}
+                sx={{
+                  color: brandBlue,
+                  fontWeight: 'bold',
+                  whiteSpace: 'nowrap', // Force single-line
+                }}
+              >
+                Welcome to Agora
+              </Typography>
+              {/* Right gold bar */}
+              <Box
+                sx={{
+                  width: 80,
+                  height: 4,
+                  backgroundColor: brandGold,
+                  ml: 2,
+                }}
+              />
+            </Box>
+
+            {/* Subtitle */}
             <Typography
               variant="body1"
               align="center"
-              sx={{ mb: 4, color: '#333' }}
+              sx={{ mb: 3, color: '#555' }}
             >
               Please sign in using one of the following:
             </Typography>
+
+            {/* Buttons */}
             <Stack spacing={2}>
               {platforms.map((platform) => (
                 <StyledButton
@@ -213,9 +310,7 @@ const SignIn = () => {
                   hovercolor={platform.hoverColor}
                   startIcon={
                     platform.icon ? (
-                      <IconWrapper>
-                        {platform.icon}
-                      </IconWrapper>
+                      <IconWrapper>{platform.icon}</IconWrapper>
                     ) : null
                   }
                   fullWidth
