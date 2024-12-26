@@ -24,6 +24,7 @@ import {
 import { styled } from '@mui/system';
 import { tutorBookingLinks } from '../config/TutorBookingLinks';
 
+// Tutor Images
 import ben from '../assets/ben.jpg';
 import edward from '../assets/edward.jpg';
 import kieran from '../assets/kieran.jpg';
@@ -32,44 +33,45 @@ import omar from '../assets/omar.jpg';
 import patrick from '../assets/patrick.jpg';
 import eli from '../assets/eli.jpg';
 
-const navy = '#001F54';
-const cream = '#FFF8E1';
-const backgroundGray = '#f9f9f9';
+// ---- Brand Colors & Theme ----
+const brandBlue = '#0e1027';
+const brandGold = '#b29600';
+const lightBackground = '#fafafa'; // Page background
 
-// Styled Components
-const StyledAppBar = styled(AppBar)({
-  backgroundColor: navy,
-});
+// ---- Styled Components ----
+const StyledAppBar = styled(AppBar)(() => ({
+  backgroundColor: brandBlue,
+}));
 
-const HeroSection = styled(Box)({
-  background: `linear-gradient(to bottom right, ${navy} 40%, ${cream} 100%)`,
+const HeroSection = styled(Box)(() => ({
+  background: `linear-gradient(to bottom right, ${brandBlue} 30%, #2a2f45 90%)`,
   color: '#fff',
   borderRadius: '8px',
   padding: '40px',
   marginTop: '24px',
   marginBottom: '40px',
   boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-});
+}));
 
-const InfoSection = styled(Paper)({
+const InfoSection = styled(Paper)(() => ({
   padding: '24px',
   borderRadius: '16px',
   backgroundColor: '#fff',
   boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
   marginBottom: '40px',
-});
+}));
 
-const TutorCard = styled(Card)({
+const TutorCard = styled(Card)(() => ({
   borderRadius: '16px',
   boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
   backgroundColor: '#fff',
-});
+}));
 
-const SectionTitle = styled(Typography)({
+const SectionTitle = styled(Typography)(() => ({
   marginBottom: '16px',
   fontWeight: '600',
-  color: navy,
-});
+  color: brandBlue,
+}));
 
 const tutorImages = {
   ben,
@@ -90,7 +92,7 @@ const BookingPage = () => {
   const authState = useContext(AuthContext);
   const navigate = useNavigate();
 
-  // Fetch Parent Data
+  // ---- Fetch Parent Data ----
   useEffect(() => {
     const token = localStorage.getItem('authToken');
     if (!token) {
@@ -117,14 +119,14 @@ const BookingPage = () => {
       })
       .catch((error) => {
         console.error('Error fetching parent data:', error);
-        // Optionally, set default values or handle error state
       });
   }, [navigate]);
 
+  // ---- Fetch Associated Students & Their Data ----
   useEffect(() => {
     const token = localStorage.getItem('authToken');
 
-    // Parse the studentID from the query parameters
+    // Parse the studentID from query parameters
     const params = new URLSearchParams(window.location.search);
     const queriedStudentID = params.get('studentID');
 
@@ -144,9 +146,10 @@ const BookingPage = () => {
       .then((data) => {
         const associatedStudents = data.associatedStudents || [];
         if (associatedStudents.length > 0) {
+          // Fetch student data
           fetchStudentsData(associatedStudents, token, queriedStudentID);
         } else {
-          // If no associated students, redirect to intake
+          // If no students, redirect to intake
           navigate('/studentintake');
         }
       })
@@ -181,7 +184,7 @@ const BookingPage = () => {
     Promise.all(fetchPromises)
       .then((students) => {
         setStudentsData(students);
-        // If queriedStudentID is provided and it's in the list, select it. Otherwise, default to the first.
+        // If queriedStudentID is provided and valid, select it. Otherwise, select the first.
         if (queriedStudentID && students.some((s) => s.studentID === queriedStudentID)) {
           setSelectedStudentID(queriedStudentID);
         } else {
@@ -195,6 +198,7 @@ const BookingPage = () => {
       });
   };
 
+  // ---- Handlers ----
   const handleStudentChange = (event) => {
     const newStudentID = event.target.value;
     setSelectedStudentID(newStudentID);
@@ -222,24 +226,25 @@ const BookingPage = () => {
         justifyContent="center"
         alignItems="center"
         height="100vh"
-        sx={{ backgroundColor: backgroundGray }}
+        sx={{ backgroundColor: lightBackground }}
       >
         <CircularProgress />
       </Box>
     );
   }
 
+  // ---- Data Access ----
   const selectedStudent = studentsData.find(
     (student) => student.studentID === selectedStudentID
   );
-
   const tutors = selectedStudent?.business.associated_tutors || [];
 
   return (
-    <Box sx={{ backgroundColor: backgroundGray, minHeight: '100vh' }}>
+    <Box sx={{ backgroundColor: lightBackground, minHeight: '100vh' }}>
+      {/* ---------------- App Bar ---------------- */}
       <StyledAppBar position="static">
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
-          {/* Left Side: Welcome Message and Avatar */}
+          {/* Left Side: Parent Greeting + Avatar */}
           <Box display="flex" alignItems="center" gap="16px">
             <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
               Welcome, {parentName}!
@@ -247,7 +252,10 @@ const BookingPage = () => {
             <Avatar
               src={parentPicture || undefined}
               alt={parentName}
-              sx={{ bgcolor: parentPicture ? 'transparent' : '#003f88', color: '#fff' }}
+              sx={{
+                bgcolor: parentPicture ? 'transparent' : brandGold,
+                color: '#fff',
+              }}
             >
               {!parentPicture && parentName.charAt(0).toUpperCase()}
             </Avatar>
@@ -256,19 +264,32 @@ const BookingPage = () => {
           {/* Right Side: Navigation Buttons */}
           <Box display="flex" alignItems="center" gap="16px">
             <Button
-              color="inherit"
               onClick={handleBackToDashboard}
               sx={{
                 textTransform: 'none',
                 fontWeight: 'bold',
+                color: '#fff',
+                border: `1px solid #fff`,
+                '&:hover': {
+                  backgroundColor: '#fff',
+                  color: brandBlue,
+                },
               }}
             >
               Back to Dashboard
             </Button>
             <Button
-              color="inherit"
               onClick={handleSignOut}
-              sx={{ textTransform: 'none', fontWeight: 'bold' }}
+              variant="contained"
+              sx={{
+                textTransform: 'none',
+                fontWeight: 'bold',
+                backgroundColor: brandGold,
+                color: '#fff',
+                '&:hover': {
+                  backgroundColor: '#9e7d00',
+                },
+              }}
             >
               Sign Out
             </Button>
@@ -276,12 +297,17 @@ const BookingPage = () => {
         </Toolbar>
       </StyledAppBar>
 
+      {/* ---------------- Hero Section ---------------- */}
       <Container maxWidth="xl" sx={{ marginTop: '24px' }}>
-        {/* Hero Section */}
         <HeroSection>
-          <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap">
+          <Box
+            display="flex"
+            alignItems="center"
+            justifyContent="space-between"
+            flexWrap="wrap"
+          >
             <Box>
-              <Typography variant="h3" component="div" sx={{ fontWeight: 700, color: '#fff' }}>
+              <Typography variant="h3" sx={{ fontWeight: 700, color: '#fff', marginBottom: '8px' }}>
                 Booking for {selectedStudent?.personal.name || 'Unnamed Student'}
               </Typography>
               <Typography variant="h6" sx={{ color: '#fff', opacity: 0.9 }}>
@@ -310,11 +336,16 @@ const BookingPage = () => {
             </Box>
           </Box>
         </HeroSection>
+      </Container>
 
-        {/* Combined Feedback & Booking Section */}
+      {/* ---------------- Feedback & Booking Section ---------------- */}
+      <Container maxWidth="xl">
         <InfoSection>
           <SectionTitle variant="h5">
-            Feedback {selectedStudent?.personal.name ? `From ${selectedStudent.personal.name}'s Tutors:` : 'for Tutors:'}
+            Feedback{' '}
+            {selectedStudent?.personal.name
+              ? `From ${selectedStudent.personal.name}'s Tutors:`
+              : 'From Tutors:'}
           </SectionTitle>
           <Divider sx={{ marginBottom: '24px' }} />
 
@@ -324,7 +355,8 @@ const BookingPage = () => {
                 const tutorInfo = tutorBookingLinks[tutor] || {};
                 const tutorKey = tutor.toLowerCase();
                 const tutorImage =
-                  tutorImages[tutorKey] || 'https://via.placeholder.com/300x200?text=Tutor+Image';
+                  tutorImages[tutorKey] ||
+                  'https://via.placeholder.com/300x200?text=Tutor+Image';
 
                 return (
                   <Grid item xs={12} key={index}>
@@ -355,18 +387,22 @@ const BookingPage = () => {
                             </Box>
                           </Grid>
 
-                          {/* Feedback & Booking */}
+                          {/* Feedback + Booking */}
                           <Grid item xs={12} md={9} display="flex" flexDirection="column">
-                            <Typography variant="h6" sx={{ fontWeight: 600, marginBottom: 2 }}>
+                            <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
                               An Update From {tutor}:
                             </Typography>
 
                             <Typography variant="body1" sx={{ flexGrow: 1 }}>
-                              {tutorInfo.feedback ||
-                                'No recent feedback available.'}
+                              {tutorInfo.feedback || 'No recent feedback available.'}
                             </Typography>
 
-                            <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ marginTop: '16px' }}>
+                            <Box
+                              display="flex"
+                              justifyContent="space-between"
+                              alignItems="center"
+                              sx={{ marginTop: '16px' }}
+                            >
                               <Typography variant="body2" color="textSecondary">
                                 {tutorInfo.feedbackDate || 'Feedback Date: N/A'}
                               </Typography>
@@ -374,15 +410,17 @@ const BookingPage = () => {
                               {tutorInfo.individualLink ? (
                                 <Button
                                   variant="contained"
-                                  color="primary"
                                   href={tutorInfo.individualLink}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   sx={{
                                     textTransform: 'none',
                                     fontWeight: 'bold',
-                                    backgroundColor: navy,
-                                    ':hover': { backgroundColor: '#002e7a' },
+                                    backgroundColor: brandBlue,
+                                    color: '#fff',
+                                    '&:hover': {
+                                      backgroundColor: '#1c2231',
+                                    },
                                   }}
                                 >
                                   Book Session
