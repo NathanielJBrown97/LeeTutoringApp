@@ -42,7 +42,7 @@ const brandBlue = '#0e1027';
 const brandGold = '#b29600';
 const lightBackground = '#fafafa';
 
-// The tab labels in an array, used for both desktop tabs & mobile dropdown:
+// The tab labels in an array (for desktop tabs or mobile dropdown).
 const tabLabels = [
   'Recent Appointments',
   'School Goals',
@@ -149,8 +149,7 @@ function TabPanel(props) {
 const ParentDashboard = () => {
   const authState = useContext(AuthContext);
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm')); // phones
-  const isTablet = useMediaQuery(theme.breakpoints.down('md')); // tablets or smaller
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm')); // phone
 
   const [associatedStudents, setAssociatedStudents] = useState([]);
   const [selectedStudentID, setSelectedStudentID] = useState(null);
@@ -265,12 +264,19 @@ const ParentDashboard = () => {
     navigate(`/parentdashboard?studentID=${newStudentID}`);
   };
 
+  // For desktop tabs
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
   };
 
-  // The tab labels array is defined above
-  // This is used for either desktop tabs or mobile dropdown.
+  // Book With A Tutor
+  const handleNavigateToBooking = () => {
+    if (selectedStudentID) {
+      navigate(`/booking?studentID=${selectedStudentID}`);
+    } else {
+      navigate('/booking');
+    }
+  };
 
   // 3-appointment scroller
   const handlePrevAppointment = () => {
@@ -283,14 +289,6 @@ const ParentDashboard = () => {
     if (startIndex + 3 < appointmentsCount) {
       setScrollDirection('down');
       setStartIndex(startIndex + 1);
-    }
-  };
-
-  const handleNavigateToBooking = () => {
-    if (selectedStudentID) {
-      navigate(`/booking?studentID=${selectedStudentID}`);
-    } else {
-      navigate('/booking');
     }
   };
 
@@ -309,11 +307,11 @@ const ParentDashboard = () => {
     );
   }
 
-  // Sort + slice appointments
+  // Sort appointments
   const sortedAppointments = [...(studentData.homeworkCompletion || [])].sort((a, b) => {
     const dateA = a.date ? new Date(a.date) : new Date(0);
     const dateB = b.date ? new Date(b.date) : new Date(0);
-    return dateB - dateA; // newest first
+    return dateB - dateA;
   });
   const appointmentsToShow = sortedAppointments.slice(startIndex, startIndex + 3);
 
@@ -354,7 +352,6 @@ const ParentDashboard = () => {
     }
     return { EBRW, Math, Reading, Writing, SAT_Total };
   };
-
   const renderACTScores = (testDoc) => {
     let English = '';
     let MathVal = '';
@@ -369,7 +366,7 @@ const ParentDashboard = () => {
     return { English, Math: MathVal, Reading, Science, ACT_Total };
   };
 
-  // Adjust heading on mobile
+  // Different heading size on mobile
   const heroHeadingVariant = isMobile ? 'h4' : 'h3';
 
   return (
@@ -435,9 +432,7 @@ const ParentDashboard = () => {
               </Typography>
               <Typography
                 variant={isMobile ? 'body1' : 'h6'}
-                sx={{
-                  opacity: 0.9,
-                }}
+                sx={{ opacity: 0.9 }}
               >
                 Track appointments, view previous and upcoming tests, and compare
                 to your student's goal schools.
@@ -559,23 +554,72 @@ const ParentDashboard = () => {
                   <KeyboardArrowUpIcon fontSize="large" />
                 </IconButton>
 
-                <Slide
-                  key={startIndex}
-                  in
-                  direction={scrollDirection === 'down' ? 'down' : 'up'}
-                  timeout={300}
-                  mountOnEnter
-                  unmountOnExit
-                  onEnter={(node) => {
-                    node.style.transform = `translateY(${
-                      scrollDirection === 'down' ? '-10%' : '10%'
-                    })`;
-                  }}
-                  onEntering={(node) => {
-                    node.style.transform = 'translateY(0%)';
-                  }}
-                >
-                  <Box sx={{ maxWidth: isMobile ? '100%' : 400 }}>
+                {/* 
+                  Desktop: Slide with ±10% offset
+                  Mobile: No animation — just a <Box> containing the appointments
+                */}
+                {!isMobile ? (
+                  <Slide
+                    key={startIndex}
+                    in
+                    direction={scrollDirection === 'down' ? 'down' : 'up'}
+                    timeout={300}
+                    mountOnEnter
+                    unmountOnExit
+                    onEnter={(node) => {
+                      const offset = '10%'; // Original partial slide
+                      node.style.transform =
+                        scrollDirection === 'down'
+                          ? `translateY(-${offset})`
+                          : `translateY(${offset})`;
+                    }}
+                    onEntering={(node) => {
+                      node.style.transform = 'translateY(0%)';
+                    }}
+                  >
+                    <Box sx={{ maxWidth: 400 }}>
+                      {appointmentsToShow.length > 0 ? (
+                        appointmentsToShow.map((appt, index) => {
+                          const parsedDate = appt.date ? new Date(appt.date) : null;
+                          const formattedDate = parsedDate
+                            ? parsedDate.toLocaleDateString(undefined, {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                              })
+                            : 'N/A';
+
+                          const duration = '1 hr';
+                          const status = 'Attended';
+                          const percentage = appt.percentage || '0%';
+
+                          return (
+                            <AppointmentCard key={index}>
+                              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                Appointment Date: {formattedDate}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                Homework Completed: {percentage}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                Duration: {duration}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#333' }}>
+                                Status: {status}
+                              </Typography>
+                            </AppointmentCard>
+                          );
+                        })
+                      ) : (
+                        <Typography variant="body2" color="textSecondary">
+                          No recent appointments available.
+                        </Typography>
+                      )}
+                    </Box>
+                  </Slide>
+                ) : (
+                  // Mobile: No animation
+                  <Box sx={{ maxWidth: '100%' }}>
                     {appointmentsToShow.length > 0 ? (
                       appointmentsToShow.map((appt, index) => {
                         const parsedDate = appt.date ? new Date(appt.date) : null;
@@ -593,32 +637,16 @@ const ParentDashboard = () => {
 
                         return (
                           <AppointmentCard key={index}>
-                            <Typography
-                              variant="subtitle1"
-                              sx={{
-                                fontWeight: 'bold',
-                                mb: 1,
-                                fontSize: isMobile ? '0.95rem' : '1rem',
-                              }}
-                            >
+                            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
                               Appointment Date: {formattedDate}
                             </Typography>
-                            <Typography
-                              variant="body2"
-                              sx={{ color: '#333', mb: 0.5, fontSize: isMobile ? '0.85rem' : '' }}
-                            >
+                            <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
                               Homework Completed: {percentage}
                             </Typography>
-                            <Typography
-                              variant="body2"
-                              sx={{ color: '#333', mb: 0.5, fontSize: isMobile ? '0.85rem' : '' }}
-                            >
+                            <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
                               Duration: {duration}
                             </Typography>
-                            <Typography
-                              variant="body2"
-                              sx={{ color: '#333', fontSize: isMobile ? '0.85rem' : '' }}
-                            >
+                            <Typography variant="body2" sx={{ color: '#333' }}>
                               Status: {status}
                             </Typography>
                           </AppointmentCard>
@@ -630,7 +658,7 @@ const ParentDashboard = () => {
                       </Typography>
                     )}
                   </Box>
-                </Slide>
+                )}
 
                 {/* Down Arrow */}
                 <IconButton
