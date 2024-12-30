@@ -673,41 +673,77 @@ const ParentDashboard = () => {
           </TabPanel>
 
           <TabPanel value={activeTab} index={1}>
-            <SectionContainer>
-              <SectionTitle variant="h6">
-                School Goals: 25th Percentile, 50th Percentile, 75th Percentile
-              </SectionTitle>
-              <Divider sx={{ marginBottom: '16px' }} />
+  <SectionContainer>
+    <SectionTitle variant="h6">
+      School Goals: 25th Percentile, 50th Percentile, 75th Percentile
+    </SectionTitle>
+    <Divider sx={{ marginBottom: '16px' }} />
 
-              {(studentData.goals || []).length > 0 ? (
-                studentData.goals.map((goal, index) => {
-                  const percentiles = [];
-                  if (goal.ACT_percentiles && goal.ACT_percentiles !== 'N/A') {
-                    percentiles.push(`ACT: ${goal.ACT_percentiles}`);
-                  }
-                  if (goal.SAT_percentiles && goal.SAT_percentiles !== 'N/A') {
-                    percentiles.push(`SAT: ${goal.SAT_percentiles}`);
-                  }
-                  const secondaryText = percentiles.join(', ');
+    {(studentData.goals || []).length > 0 ? (
+      <TableContainer>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 600 }}>School</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>
+                ACT Percentile
+                <br />
+                <Typography variant="caption">25th, 50th, 75th</Typography>
+              </TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>
+                SAT Percentile
+                <br />
+                <Typography variant="caption">25th, 50th, 75th</Typography>
+              </TableCell>
+            </TableRow>
+          </TableHead>
 
-                  return (
-                    <Box key={index} sx={{ mb: 2 }}>
-                      <ListItemText
-                        primary={goal.university || goal.College || 'N/A'}
-                        secondary={secondaryText || 'No percentiles available.'}
-                        sx={{ paddingLeft: 0 }}
-                      />
-                      <Divider sx={{ my: 1 }} />
-                    </Box>
-                  );
-                })
-              ) : (
-                <Typography variant="body2" color="textSecondary">
-                  No school goals available.
-                </Typography>
-              )}
-            </SectionContainer>
-          </TabPanel>
+          <TableBody>
+            {studentData.goals.map((goal, index) => {
+              const schoolName = goal.university || goal.College || 'N/A';
+
+              // ---- ACT Column ----
+              // Build an array exactly like your original code, but WITHOUT "ACT:" prefix
+              let actArray = [];
+              if (goal.ACT_percentiles && goal.ACT_percentiles !== 'N/A') {
+                // For example: '23, 25, 29'
+                // If multiple values need to be stored, push them, then join below
+                actArray.push(goal.ACT_percentiles);
+              }
+              // Join everything with comma + space
+              const actPercentile = actArray.length > 0
+                ? actArray.join(', ')
+                : 'No data';
+
+              // ---- SAT Column ----
+              let satArray = [];
+              if (goal.SAT_percentiles && goal.SAT_percentiles !== 'N/A') {
+                satArray.push(goal.SAT_percentiles);
+              }
+              const satPercentile = satArray.length > 0
+                ? satArray.join(', ')
+                : 'No data';
+
+              return (
+                <TableRow key={index}>
+                  <TableCell>{schoolName}</TableCell>
+                  <TableCell>{actPercentile}</TableCell>
+                  <TableCell>{satPercentile}</TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    ) : (
+      <Typography variant="body2" color="textSecondary">
+        No school goals available.
+      </Typography>
+    )}
+  </SectionContainer>
+</TabPanel>
+
+
 
           <TabPanel value={activeTab} index={2}>
             <SectionContainer>
