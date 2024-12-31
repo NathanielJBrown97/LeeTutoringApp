@@ -20,6 +20,8 @@ import {
   Paper,
   Divider,
   Avatar,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import { styled } from '@mui/system';
 import { tutorBookingLinks } from '../config/TutorBookingLinks';
@@ -89,8 +91,12 @@ const BookingPage = () => {
   const [parentName, setParentName] = useState('Parent');
   const [parentPicture, setParentPicture] = useState(null);
   const [loading, setLoading] = useState(true);
+
   const authState = useContext(AuthContext);
   const navigate = useNavigate();
+
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // ---- Fetch Parent Data ----
   useEffect(() => {
@@ -241,112 +247,207 @@ const BookingPage = () => {
 
   return (
     <Box sx={{ backgroundColor: lightBackground, minHeight: '100vh' }}>
-      {/* ---------------- App Bar ---------------- */}
-      <StyledAppBar position="static">
-        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
-          {/* Left Side: Parent Greeting + Avatar */}
-          <Box display="flex" alignItems="center" gap="16px">
-            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-              Welcome, {parentName}!
-            </Typography>
-            <Avatar
-              src={parentPicture || undefined}
-              alt={parentName}
-              sx={{
-                bgcolor: parentPicture ? 'transparent' : brandGold,
-                color: '#fff',
-              }}
-            >
-              {!parentPicture && parentName.charAt(0).toUpperCase()}
-            </Avatar>
-          </Box>
+      {/* ---------------- Updated App Bar to match the request ---------------- */}
+      <StyledAppBar position="static" elevation={3}>
+  <Toolbar
+    disableGutters
+    sx={{ 
+      // Keep small horizontal padding, plus a little vertical padding
+      px: 2,
+      py: 1,
+    }}
+  >
+    {isMobile ? (
+      <Box 
+        sx={{ 
+          width: '100%',
+          px: 2,
+        }}
+      >
+        {/* Top row: "Welcome..." + Sign Out aligned right */}
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            width: '100%',
+            mb: 1,
+            py: 1, // Add top/bottom padding for more vertical spacing
+          }}
+        >
+          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+            Welcome, {parentName}!
+          </Typography>
 
-          {/* Right Side: Navigation Buttons */}
-          <Box display="flex" alignItems="center" gap="16px">
+          <Button
+            onClick={handleSignOut}
+            variant="contained"
+            sx={{
+              backgroundColor: brandGold,
+              color: '#fff',
+              fontWeight: 'bold',
+              textTransform: 'none',
+              mr: 0.5, 
+              '&:hover': {
+                backgroundColor: '#d4a100',
+              },
+            }}
+          >
+            Sign Out
+          </Button>
+        </Box>
+
+        {/* Second row: Avatar */}
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center',
+            py: 1, // Additional vertical space for the avatar
+          }}
+        >
+          <Avatar
+            src={parentPicture || undefined}
+            alt={parentName}
+            sx={{
+              bgcolor: parentPicture ? 'transparent' : brandGold,
+              color: '#fff',
+            }}
+          >
+            {!parentPicture && parentName.charAt(0).toUpperCase()}
+          </Avatar>
+        </Box>
+      </Box>
+    ) : (
+      // For desktop
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '100%',
+          px: 2,
+          py: 1, // Vertical space on desktop
+        }}
+      >
+        {/* Left side: Welcome + Avatar */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+            Welcome, {parentName}!
+          </Typography>
+          <Avatar
+            src={parentPicture || undefined}
+            alt={parentName}
+            sx={{
+              bgcolor: parentPicture ? 'transparent' : brandGold,
+              color: '#fff',
+            }}
+          >
+            {!parentPicture && parentName.charAt(0).toUpperCase()}
+          </Avatar>
+        </Box>
+
+        {/* Right side: Sign Out */}
+        <Button
+          onClick={handleSignOut}
+          variant="contained"
+          sx={{
+            backgroundColor: brandGold,
+            color: '#fff',
+            fontWeight: 'bold',
+            textTransform: 'none',
+            mr: 0.5,
+            '&:hover': {
+              backgroundColor: '#d4a100',
+            },
+          }}
+        >
+          Sign Out
+        </Button>
+      </Box>
+    )}
+  </Toolbar>
+</StyledAppBar>
+
+
+      {/* ---------------- Hero Section ---------------- */}
+      {/* ---------------- Hero Section ---------------- */}
+<Container maxWidth="xl" sx={{ marginTop: '24px' }}>
+  <HeroSection>
+    {/* One line: "Booking for:" on left, dropdown on right */}
+    <Box
+      display="flex"
+      alignItems="center"
+      flexWrap="nowrap"          // Prevents text + dropdown from wrapping
+      gap={2}                    // Some space between text & dropdown
+      sx={{
+        whiteSpace: 'nowrap',    // Force single-line
+      }}
+    >
+      <Typography
+        variant={isMobile ? 'h6' : 'h5'}
+        sx={{ fontWeight: 700, m: 0 }}
+      >
+        Booking for:
+      </Typography>
+
+      <Select
+        size="small"             // Make the dropdown a bit smaller
+        value={selectedStudentID}
+        onChange={handleStudentChange}
+        variant="outlined"
+        sx={{
+          height: 40,           // Ensure a consistent height
+          backgroundColor: '#fff',
+          borderRadius: '8px',
+          fontWeight: 500,
+          minWidth: isMobile ? 140 : 180, // Adjust for mobile vs. desktop
+        }}
+      >
+        {studentsData.map((student) => (
+          <MenuItem key={student.studentID} value={student.studentID}>
+            {student.personal.name || 'Unnamed Student'}
+          </MenuItem>
+        ))}
+      </Select>
+    </Box>
+  </HeroSection>
+</Container>
+
+
+      {/* ---------------- Feedback & Booking Section ---------------- */}
+      <Container maxWidth="xl">
+        <InfoSection>
+          {/* Title + "Back to Dashboard" Aligned Right */}
+          <Box
+            display="flex"
+            justifyContent="space-between"
+            alignItems="center"
+            sx={{ marginBottom: '16px' }}
+          >
+            <SectionTitle variant="h5" sx={{ m: 0 }}>
+              {selectedStudent?.personal.name
+                ? `Feedback From ${selectedStudent.personal.name}'s Tutors:`
+                : 'Feedback From Tutors:'}
+            </SectionTitle>
+
             <Button
               onClick={handleBackToDashboard}
               sx={{
                 textTransform: 'none',
                 fontWeight: 'bold',
-                color: '#fff',
-                border: `1px solid #fff`,
+                color: brandBlue,
+                border: `1px solid ${brandBlue}`,
                 '&:hover': {
-                  backgroundColor: '#fff',
-                  color: brandBlue,
+                  backgroundColor: brandBlue,
+                  color: '#fff',
                 },
               }}
             >
               Back to Dashboard
             </Button>
-            <Button
-              onClick={handleSignOut}
-              variant="contained"
-              sx={{
-                textTransform: 'none',
-                fontWeight: 'bold',
-                backgroundColor: brandGold,
-                color: '#fff',
-                '&:hover': {
-                  backgroundColor: '#9e7d00',
-                },
-              }}
-            >
-              Sign Out
-            </Button>
           </Box>
-        </Toolbar>
-      </StyledAppBar>
 
-      {/* ---------------- Hero Section ---------------- */}
-      <Container maxWidth="xl" sx={{ marginTop: '24px' }}>
-        <HeroSection>
-          <Box
-            display="flex"
-            alignItems="center"
-            justifyContent="space-between"
-            flexWrap="wrap"
-          >
-            <Box>
-              <Typography variant="h3" sx={{ fontWeight: 700, color: '#fff', marginBottom: '8px' }}>
-                Booking for {selectedStudent?.personal.name || 'Unnamed Student'}
-              </Typography>
-              <Typography variant="h6" sx={{ color: '#fff', opacity: 0.9 }}>
-                Manage tutoring sessions and view recent feedback from your student’s tutors.
-              </Typography>
-            </Box>
-
-            <Box mt={{ xs: 2, md: 0 }}>
-              <Select
-                value={selectedStudentID}
-                onChange={handleStudentChange}
-                variant="outlined"
-                sx={{
-                  minWidth: '240px',
-                  backgroundColor: '#fff',
-                  borderRadius: '8px',
-                  fontWeight: 500,
-                }}
-              >
-                {studentsData.map((student) => (
-                  <MenuItem key={student.studentID} value={student.studentID}>
-                    {student.personal.name || 'Unnamed Student'}
-                  </MenuItem>
-                ))}
-              </Select>
-            </Box>
-          </Box>
-        </HeroSection>
-      </Container>
-
-      {/* ---------------- Feedback & Booking Section ---------------- */}
-      <Container maxWidth="xl">
-        <InfoSection>
-          <SectionTitle variant="h5">
-            Feedback{' '}
-            {selectedStudent?.personal.name
-              ? `From ${selectedStudent.personal.name}'s Tutors:`
-              : 'From Tutors:'}
-          </SectionTitle>
           <Divider sx={{ marginBottom: '24px' }} />
 
           {tutors.length > 0 ? (
