@@ -805,82 +805,41 @@ const ParentDashboard = () => {
 
           {/* ============== Recent Appointments ============== */}
           <TabPanel value={activeTab} index={0}>
-            <SectionContainer>
-              <SectionTitle variant="h6">Recent Appointments</SectionTitle>
-              <Divider sx={{ marginBottom: '16px' }} />
+          <SectionContainer>
+            <SectionTitle variant="h6">Recent Appointments</SectionTitle>
+            <Divider sx={{ marginBottom: '16px' }} />
 
-              <Box display="flex" flexDirection="column" alignItems="center">
-                {/* Up Arrow */}
-                <IconButton
-                  onClick={handlePrevAppointment}
-                  disabled={startIndex === 0}
-                  sx={{ mb: 2 }}
+            <Box display="flex" flexDirection="column" alignItems="center">
+              {/* Up Arrow */}
+              <IconButton
+                onClick={handlePrevAppointment}
+                disabled={startIndex === 0}
+                sx={{ mb: 2 }}
+              >
+                <KeyboardArrowUpIcon fontSize="large" />
+              </IconButton>
+
+              {/* Desktop: Slide with ±10% offset; Mobile: no animation */}
+              {!isMobile ? (
+                <Slide
+                  key={startIndex}
+                  in
+                  direction={scrollDirection === 'down' ? 'down' : 'up'}
+                  timeout={300}
+                  mountOnEnter
+                  unmountOnExit
+                  onEnter={(node) => {
+                    const offset = '10%';
+                    node.style.transform =
+                      scrollDirection === 'down'
+                        ? `translateY(-${offset})`
+                        : `translateY(${offset})`;
+                  }}
+                  onEntering={(node) => {
+                    node.style.transform = 'translateY(0%)';
+                  }}
                 >
-                  <KeyboardArrowUpIcon fontSize="large" />
-                </IconButton>
-
-                {/* Desktop: Slide with ±10% offset; Mobile: no animation */}
-                {!isMobile ? (
-                  <Slide
-                    key={startIndex}
-                    in
-                    direction={scrollDirection === 'down' ? 'down' : 'up'}
-                    timeout={300}
-                    mountOnEnter
-                    unmountOnExit
-                    onEnter={(node) => {
-                      const offset = '10%';
-                      node.style.transform =
-                        scrollDirection === 'down'
-                          ? `translateY(-${offset})`
-                          : `translateY(${offset})`;
-                    }}
-                    onEntering={(node) => {
-                      node.style.transform = 'translateY(0%)';
-                    }}
-                  >
-                    <Box sx={{ maxWidth: 400 }}>
-                      {appointmentsToShow.length > 0 ? (
-                        appointmentsToShow.map((appt, index) => {
-                          const parsedDate = appt.date ? new Date(appt.date) : null;
-                          const formattedDate = parsedDate
-                            ? parsedDate.toLocaleDateString(undefined, {
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric',
-                              })
-                            : 'N/A';
-                          const duration = '1 hr';
-                          const status = 'Attended';
-                          const percentage = appt.percentage || '0%';
-
-                          return (
-                            <AppointmentCard key={index}>
-                              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                                Appointment Date: {formattedDate}
-                              </Typography>
-                              <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
-                                Homework Completed: {percentage}
-                              </Typography>
-                              <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
-                                Duration: {duration}
-                              </Typography>
-                              <Typography variant="body2" sx={{ color: '#333' }}>
-                                Status: {status}
-                              </Typography>
-                            </AppointmentCard>
-                          );
-                        })
-                      ) : (
-                        <Typography variant="body2" color="textSecondary">
-                          No recent appointments available.
-                        </Typography>
-                      )}
-                    </Box>
-                  </Slide>
-                ) : (
-                  // Mobile: No animation
-                  <Box sx={{ maxWidth: '100%' }}>
+                  <Box sx={{ maxWidth: 400 }}>
                     {appointmentsToShow.length > 0 ? (
                       appointmentsToShow.map((appt, index) => {
                         const parsedDate = appt.date ? new Date(appt.date) : null;
@@ -891,9 +850,11 @@ const ParentDashboard = () => {
                               day: 'numeric',
                             })
                           : 'N/A';
-                        const duration = '1 hr';
-                        const status = 'Attended';
-                        const percentage = appt.percentage || '0%';
+
+                        // Populate fields from 'appt'
+                        const percentage = `${appt.percentage ?? 0}%`;
+                        const duration = appt.duration ?? 'N/A';
+                        const status = appt.attendance ? 'Attended' : 'Missed';
 
                         return (
                           <AppointmentCard key={index}>
@@ -918,19 +879,63 @@ const ParentDashboard = () => {
                       </Typography>
                     )}
                   </Box>
-                )}
+                </Slide>
+              ) : (
+                // Mobile: No animation
+                <Box sx={{ maxWidth: '100%' }}>
+                  {appointmentsToShow.length > 0 ? (
+                    appointmentsToShow.map((appt, index) => {
+                      const parsedDate = appt.date ? new Date(appt.date) : null;
+                      const formattedDate = parsedDate
+                        ? parsedDate.toLocaleDateString(undefined, {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                          })
+                        : 'N/A';
 
-                {/* Down Arrow */}
-                <IconButton
-                  onClick={() => handleNextAppointment(sortedAppointments.length)}
-                  disabled={startIndex + 3 >= sortedAppointments.length}
-                  sx={{ mt: 2 }}
-                >
-                  <KeyboardArrowDownIcon fontSize="large" />
-                </IconButton>
-              </Box>
-            </SectionContainer>
-          </TabPanel>
+                      // Populate fields from 'appt'
+                      const percentage = `${appt.percentage ?? 0}%`;
+                      const duration = appt.duration ?? 'N/A';
+                      const status = appt.attendance ? 'Attended' : 'Missed';
+
+                      return (
+                        <AppointmentCard key={index}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                            Appointment Date: {formattedDate}
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                            Homework Completed: {percentage}
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                            Duration: {duration}
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: '#333' }}>
+                            Status: {status}
+                          </Typography>
+                        </AppointmentCard>
+                      );
+                    })
+                  ) : (
+                    <Typography variant="body2" color="textSecondary">
+                      No recent appointments available.
+                    </Typography>
+                  )}
+                </Box>
+              )}
+
+              {/* Down Arrow */}
+              <IconButton
+                onClick={() => handleNextAppointment(sortedAppointments.length)}
+                disabled={startIndex + 3 >= sortedAppointments.length}
+                sx={{ mt: 2 }}
+              >
+                <KeyboardArrowDownIcon fontSize="large" />
+              </IconButton>
+            </Box>
+          </SectionContainer>
+        </TabPanel>
+
 
          {/* ============== School Goals ============== */}
          <TabPanel value={activeTab} index={1}>

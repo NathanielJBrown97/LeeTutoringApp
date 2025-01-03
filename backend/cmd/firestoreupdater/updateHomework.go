@@ -3,33 +3,55 @@ package firestoreupdater
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"google.golang.org/api/iterator"
 )
 
-type HomeworkCompletion struct {
+// HomeworkPayload is the JSON body we expect.
+type HomeworkPayload struct {
 	StudentName string `json:"studentName"`
 	Date        string `json:"date"`
 	Percentage  string `json:"percentage"`
+	Tutor       string `json:"tutor"`
+	Duration    string `json:"duration"`
+	Attendance  string `json:"attendance"`
+	Feedback    string `json:"feedback"`
 }
 
+// UpdateHomeworkCompletionHandler:
+//   - Finds the student in Firestore
+//   - Opens the subcollection "Homework Completion"
+//   - Creates a doc with the date replaced with dashes
+//   - Stores exactly these 7 fields: date, percentage, tutor, duration, attendance, feedback, timestamp
 func (app *App) UpdateHomeworkCompletionHandler(w http.ResponseWriter, r *http.Request) {
-	// Parse the JSON request body
-	var hwComp HomeworkCompletion
-	err := json.NewDecoder(r.Body).Decode(&hwComp)
-	if err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+	// Only handle POST requests
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	// Decode the request body
+	var payload HomeworkPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("Received homework completion data: %+v\n", payload)
 
 	ctx := context.Background()
 	client := app.FirestoreClient
 
-	// Query the 'students' collection for the student with matching name
-	iter := client.Collection("students").Where("personal.name", "==", hwComp.StudentName).Documents(ctx)
+	// 1) Query 'students' collection to find the doc with the matching name
+	iter := client.Collection("students").
+		Where("personal.name", "==", payload.StudentName).
+		Documents(ctx)
+
 	doc, err := iter.Next()
 	if err == iterator.Done {
 		http.Error(w, "Student not found", http.StatusNotFound)
@@ -41,22 +63,25 @@ func (app *App) UpdateHomeworkCompletionHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// 2) Access the subcollection "Homework Completion"
 	studentDocRef := doc.Ref
+	homeworkCollection := studentDocRef.Collection("Homework Completion")
 
-	// Access the 'Homework Completion' subcollection
-	homeworkCompCollection := studentDocRef.Collection("Homework Completion")
+	// 3) Create a doc name from the date by replacing / with -
+	docName := strings.ReplaceAll(payload.Date, "/", "-")
 
-	sanitizedDate := strings.ReplaceAll(hwComp.Date, "/", "-")
-
-	// Create or update the document with the date as the document ID
-	docRef := homeworkCompCollection.Doc(sanitizedDate)
-
+	// 4) Exactly these 7 fields (no extra, no less)
 	data := map[string]interface{}{
-		"date":       hwComp.Date,
-		"percentage": hwComp.Percentage,
+		"date":                payload.Date,
+		"percentage_complete": payload.Percentage,
+		"tutor":               payload.Tutor,
+		"duration":            payload.Duration,
+		"attendance":          payload.Attendance,
+		"feedback":            payload.Feedback,
+		"timestamp":           time.Now().Format(time.RFC3339), // store as string
 	}
 
-	_, err = docRef.Set(ctx, data)
+	_, err = homeworkCollection.Doc(docName).Set(ctx, data)
 	if err != nil {
 		log.Printf("Failed to write to Firestore: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -64,5 +89,5 @@ func (app *App) UpdateHomeworkCompletionHandler(w http.ResponseWriter, r *http.R
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Success"))
+	fmt.Fprintln(w, "Homework completion data saved successfully.")
 }

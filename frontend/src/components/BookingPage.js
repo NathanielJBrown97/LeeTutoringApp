@@ -184,6 +184,8 @@ const BookingPage = () => {
           studentID,
           personal: studentData.personal || {},
           business: studentData.business || {},
+          // Include homeworkCompletion here so we can look for tutor-specific feedback
+          homeworkCompletion: studentData.homeworkCompletion || [],
         }))
     );
 
@@ -244,143 +246,142 @@ const BookingPage = () => {
     (student) => student.studentID === selectedStudentID
   );
   const tutors = selectedStudent?.business.associated_tutors || [];
+  // We'll need the full homeworkCompletion array to find feedback for each tutor
+  const allCompletions = selectedStudent?.homeworkCompletion || [];
 
   return (
     <Box sx={{ backgroundColor: lightBackground, minHeight: '100vh' }}>
-    <StyledAppBar position="static" elevation={3}>
-  <Toolbar
-    disableGutters
-    sx={{
-      // Slight left/right padding so it’s not flush
-      px: 2,
-      // A bit of vertical padding for better spacing
-      py: 1,
-    }}
-  >
-    {isMobile ? (
-      <Box sx={{ width: '100%' }}>
-        {/* Top row: Welcome + Sign Out in a single line */}
-        <Box
+      {/* ---------- AppBar ---------- */}
+      <StyledAppBar position="static" elevation={3}>
+        <Toolbar
+          disableGutters
           sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            width: '100%',
-            mb: 1,
-            // Prevent wrapping for text & button
-            whiteSpace: 'nowrap',
+            px: 2,
+            py: 1,
           }}
         >
-          <Typography
-            variant="h6"
-            sx={{
-              fontWeight: 'bold',
-              // Also ensure no wrapping
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            Welcome, {parentName}!
-          </Typography>
+          {isMobile ? (
+            <Box sx={{ width: '100%' }}>
+              {/* Top row: Welcome + Sign Out */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  width: '100%',
+                  mb: 1,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontWeight: 'bold',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  Welcome, {parentName}!
+                </Typography>
 
-          <Button
-            onClick={handleSignOut}
-            variant="contained"
-            sx={{
-              backgroundColor: brandGold,
-              color: '#fff',
-              fontWeight: 'bold',
-              textTransform: 'none',
-              whiteSpace: 'nowrap',     // Force single line
-              // Provide a small margin if needed
-              mr: 0.5,
-              '&:hover': {
-                backgroundColor: '#d4a100',
-              },
-            }}
-          >
-            Sign Out
-          </Button>
-        </Box>
+                <Button
+                  onClick={handleSignOut}
+                  variant="contained"
+                  sx={{
+                    backgroundColor: brandGold,
+                    color: '#fff',
+                    fontWeight: 'bold',
+                    textTransform: 'none',
+                    whiteSpace: 'nowrap',
+                    mr: 0.5,
+                    '&:hover': {
+                      backgroundColor: '#d4a100',
+                    },
+                  }}
+                >
+                  Sign Out
+                </Button>
+              </Box>
 
-        {/* Second row: Avatar only */}
-        <Box sx={{ display: 'flex', alignItems: 'center', py: 1 }}>
-          <Avatar
-            src={parentPicture || undefined}
-            alt={parentName}
-            sx={{
-              bgcolor: parentPicture ? 'transparent' : brandGold,
-              color: '#fff',
-            }}
-          >
-            {!parentPicture && parentName.charAt(0).toUpperCase()}
-          </Avatar>
-        </Box>
-      </Box>
-    ) : (
-      // Desktop Layout
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          width: '100%',
-          px: 2,
-          py: 1,
-        }}
-      >
-        {/* Left side: Welcome + Avatar */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Typography variant="h5" sx={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>
-            Welcome, {parentName}!
-          </Typography>
-          <Avatar
-            src={parentPicture || undefined}
-            alt={parentName}
-            sx={{
-              bgcolor: parentPicture ? 'transparent' : brandGold,
-              color: '#fff',
-            }}
-          >
-            {!parentPicture && parentName.charAt(0).toUpperCase()}
-          </Avatar>
-        </Box>
+              {/* Second row: Avatar only */}
+              <Box sx={{ display: 'flex', alignItems: 'center', py: 1 }}>
+                <Avatar
+                  src={parentPicture || undefined}
+                  alt={parentName}
+                  sx={{
+                    bgcolor: parentPicture ? 'transparent' : brandGold,
+                    color: '#fff',
+                  }}
+                >
+                  {!parentPicture && parentName.charAt(0).toUpperCase()}
+                </Avatar>
+              </Box>
+            </Box>
+          ) : (
+            // Desktop Layout
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+                px: 2,
+                py: 1,
+              }}
+            >
+              {/* Left side: Welcome + Avatar */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Typography variant="h5" sx={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                  Welcome, {parentName}!
+                </Typography>
+                <Avatar
+                  src={parentPicture || undefined}
+                  alt={parentName}
+                  sx={{
+                    bgcolor: parentPicture ? 'transparent' : brandGold,
+                    color: '#fff',
+                  }}
+                >
+                  {!parentPicture && parentName.charAt(0).toUpperCase()}
+                </Avatar>
+              </Box>
 
-        {/* Right side: Sign Out */}
-        <Button
-          onClick={handleSignOut}
-          variant="contained"
-          sx={{
-            backgroundColor: brandGold,
-            color: '#fff',
-            fontWeight: 'bold',
-            textTransform: 'none',
-            whiteSpace: 'nowrap', // Ensure single line
-            mr: 0.5,
-            '&:hover': {
-              backgroundColor: '#d4a100',
-            },
-          }}
-        >
-          Sign Out
-        </Button>
-      </Box>
-    )}
-  </Toolbar>
-</StyledAppBar>
-      {/* ---------------- Hero Section ---------------- */}
+              {/* Right side: Sign Out */}
+              <Button
+                onClick={handleSignOut}
+                variant="contained"
+                sx={{
+                  backgroundColor: brandGold,
+                  color: '#fff',
+                  fontWeight: 'bold',
+                  textTransform: 'none',
+                  whiteSpace: 'nowrap',
+                  mr: 0.5,
+                  '&:hover': {
+                    backgroundColor: '#d4a100',
+                  },
+                }}
+              >
+                Sign Out
+              </Button>
+            </Box>
+          )}
+        </Toolbar>
+      </StyledAppBar>
+
+      {/* ---------- Hero Section ---------- */}
       <Container maxWidth="xl" sx={{ marginTop: '24px' }}>
         <HeroSection>
-          {/* One line: "Booking for:" on left, dropdown on right */}
+          {/* Single row: "Booking for:" + dropdown */}
           <Box
             display="flex"
             alignItems="center"
-            flexWrap="nowrap"          // Prevents text + dropdown from wrapping
-            gap={2}                    // Some space between text & dropdown
+            flexWrap="nowrap"
+            gap={2}
             sx={{
-              whiteSpace: 'nowrap',    // Force single-line
+              whiteSpace: 'nowrap',
             }}
           >
             <Typography
@@ -391,16 +392,16 @@ const BookingPage = () => {
             </Typography>
 
             <Select
-              size="small"             // Make the dropdown a bit smaller
+              size="small"
               value={selectedStudentID}
               onChange={handleStudentChange}
               variant="outlined"
               sx={{
-                height: 40,           // Ensure a consistent height
+                height: 40,
                 backgroundColor: '#fff',
                 borderRadius: '8px',
                 fontWeight: 500,
-                minWidth: isMobile ? 140 : 180, // Adjust for mobile vs. desktop
+                minWidth: isMobile ? 140 : 180,
               }}
             >
               {studentsData.map((student) => (
@@ -411,7 +412,6 @@ const BookingPage = () => {
             </Select>
           </Box>
 
-          {/* Second row: The descriptive text */}
           <Box mt={2}>
             <Typography
               variant={isMobile ? 'body1' : 'h6'}
@@ -423,11 +423,9 @@ const BookingPage = () => {
         </HeroSection>
       </Container>
 
-
-      {/* ---------------- Feedback & Booking Section ---------------- */}
+      {/* ---------- Feedback & Booking Section ---------- */}
       <Container maxWidth="xl">
         <InfoSection>
-          {/* Title + "Back to Dashboard" Aligned Right */}
           <Box
             display="flex"
             justifyContent="space-between"
@@ -468,6 +466,23 @@ const BookingPage = () => {
                   tutorImages[tutorKey] ||
                   'https://via.placeholder.com/300x200?text=Tutor+Image';
 
+                // Find the most recent homeworkCompletion document for this tutor
+                const recentTutorCompletion = [...allCompletions]
+                  .filter(
+                    (hw) =>
+                      hw.tutor &&
+                      hw.tutor.toLowerCase() === tutor.toLowerCase()
+                  )
+                  .sort(
+                    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+                  )[0];
+
+                // Extract feedback and date if found
+                const feedbackText =
+                  recentTutorCompletion?.feedback || 'No recent feedback available.';
+                const feedbackDate =
+                  recentTutorCompletion?.date || 'N/A';
+
                 return (
                   <Grid item xs={12} key={index}>
                     <TutorCard>
@@ -498,13 +513,19 @@ const BookingPage = () => {
                           </Grid>
 
                           {/* Feedback + Booking */}
-                          <Grid item xs={12} md={9} display="flex" flexDirection="column">
+                          <Grid
+                            item
+                            xs={12}
+                            md={9}
+                            display="flex"
+                            flexDirection="column"
+                          >
                             <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
                               An Update From {tutor}:
                             </Typography>
 
                             <Typography variant="body1" sx={{ flexGrow: 1 }}>
-                              {tutorInfo.feedback || 'No recent feedback available.'}
+                              {feedbackText}
                             </Typography>
 
                             <Box
@@ -514,7 +535,7 @@ const BookingPage = () => {
                               sx={{ marginTop: '16px' }}
                             >
                               <Typography variant="body2" color="textSecondary">
-                                {tutorInfo.feedbackDate || 'Feedback Date: N/A'}
+                                {`Feedback Date: ${feedbackDate}`}
                               </Typography>
 
                               {tutorInfo.individualLink ? (

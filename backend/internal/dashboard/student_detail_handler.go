@@ -146,8 +146,13 @@ func (a *App) StudentDetailHandler(w http.ResponseWriter, r *http.Request) {
 			data := doc.Data()
 			homeworkData := map[string]interface{}{
 				"id":         doc.Ref.ID,
+				"attendance": data["attendance"],
 				"date":       data["date"],
+				"duration":   data["duration"],
+				"feedback":   data["feedback"],
 				"percentage": data["percentage_complete"],
+				"timestamp":  data["timestamp"],
+				"tutor":      data["tutor"],
 			}
 			homeworkCompletion = append(homeworkCompletion, homeworkData)
 		}
