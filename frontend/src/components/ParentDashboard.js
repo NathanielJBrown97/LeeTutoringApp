@@ -4,6 +4,19 @@ import React, { useEffect, useState, useContext } from 'react';
 import { API_BASE_URL } from '../config';
 import { AuthContext } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+
+// --- Recharts ---
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+} from 'recharts';
+
 import {
   Container,
   AppBar,
@@ -31,16 +44,27 @@ import {
   Slide,
   useMediaQuery,
   useTheme,
+  Chip,
 } from '@mui/material';
 import { styled } from '@mui/system';
+import { Collapse } from '@mui/material';
 
+// MUI Icons
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 
 // -------------------- Brand Colors --------------------
 const brandBlue = '#0e1027';
 const brandGold = '#b29600';
 const lightBackground = '#fafafa';
+const brandGoldLight = '#d4a100';
+const brandGoldLighter = '#f5dd5c';
+const brandBlueLight = '#2a2f45';
+
 
 // The tab labels in an array (for desktop tabs or mobile dropdown).
 const tabLabels = [
@@ -51,11 +75,8 @@ const tabLabels = [
 ];
 
 // -------------------- Styled Components --------------------
-const StyledAppBar = styled(AppBar)(({ theme }) => ({
+const StyledAppBar = styled(AppBar)(() => ({
   backgroundColor: brandBlue,
-  [theme.breakpoints.down('sm')]: {
-    padding: theme.spacing(1),
-  },
 }));
 
 const HeroSection = styled(Box)(({ theme }) => ({
@@ -143,6 +164,52 @@ function TabPanel(props) {
     >
       {value === index && children}
     </Box>
+  );
+}
+
+// -- Helper function to safely parse integers --
+const parseScore = (scoreStr) => {
+  // Attempt to parse a number from the string. Returns NaN if invalid.
+  const val = parseInt(scoreStr, 10);
+  return isNaN(val) ? null : val;
+};
+
+// Percentage change helper
+function computePercentageChange(oldVal, newVal) {
+  // If oldVal is null, zero, or invalid, we can't do a % difference
+  if (!oldVal || oldVal <= 0) return null;
+  const diff = newVal - oldVal;
+  const percent = (diff / oldVal) * 100; // e.g. +25 means +25%
+  return percent;
+}
+
+// A combined function that returns a Chip showing both the numeric difference
+// (+2 or -1) AND the % difference (+10.0% or -5.0%).
+function renderChangeChip(oldVal, newVal) {
+  if (oldVal === null || newVal === null) return '—'; // baseline or invalid
+
+  const diff = newVal - oldVal; // e.g. +2 or -3
+  const pct = computePercentageChange(oldVal, newVal);
+  if (pct === null) return '—'; // baseline
+
+  const signDiff = diff > 0 ? `+${diff}` : diff.toString(); // e.g. +2 or -2
+  const signPct = pct > 0 ? `+${pct.toFixed(1)}%` : `${pct.toFixed(1)}%`;
+
+  const arrowSymbol = diff > 0 ? '▲' : '▼';
+  const combinedLabel = `${signDiff} ${arrowSymbol} ${signPct}`; // e.g. "+2 ▲ +10.0%"
+
+  // Color
+  let chipColor = 'default';
+  if (diff > 0) chipColor = 'success';
+  else if (diff < 0) chipColor = 'error';
+
+  return (
+    <Chip
+      label={combinedLabel}
+      color={chipColor}
+      size="small"
+      sx={{ fontWeight: 600 }}
+    />
   );
 }
 
@@ -307,7 +374,53 @@ const ParentDashboard = () => {
     );
   }
 
-  // Sort appointments
+  // -------------- After we have studentData --------------
+  // Test data separation
+  const testData = studentData.testData || [];
+  const satTests = testData.filter((t) => {
+    const upperTest = (t.test || '').toUpperCase();
+    return upperTest.includes('SAT') || upperTest.includes('PSAT');
+  });
+  const actTests = testData.filter((t) => {
+    const upperTest = (t.test || '').toUpperCase();
+    return upperTest.includes('ACT');
+  });
+
+  // Ascending arrays for line charts
+  const ascendingSatTests = [...satTests].sort(
+    (a, b) => new Date(a.date || 0) - new Date(b.date || 0)
+  );
+  const ascendingActTests = [...actTests].sort(
+    (a, b) => new Date(a.date || 0) - new Date(b.date || 0)
+  );
+
+  // Build line data for SAT
+  const lineDataSAT = ascendingSatTests.map((testDoc, idx) => {
+    const { EBRW, Math, Reading, Writing, SAT_Total } = renderSATScores(testDoc);
+    return {
+      name: testDoc.date || `Test #${idx + 1}`,
+      EBRW: parseScore(EBRW) || 0,
+      Math: parseScore(Math) || 0,
+      Reading: parseScore(Reading) || 0,
+      Writing: parseScore(Writing) || 0,
+      Total: parseScore(SAT_Total) || 0,
+    };
+  });
+
+  // Build line data for ACT
+  const lineDataACT = ascendingActTests.map((testDoc, idx) => {
+    const { English, MathVal, Reading, Science, ACT_Total } = renderACTScores(testDoc);
+    return {
+      name: testDoc.date || `Test #${idx + 1}`,
+      English: parseScore(English) || 0,
+      MathVal: parseScore(MathVal) || 0,
+      Reading: parseScore(Reading) || 0,
+      Science: parseScore(Science) || 0,
+      Total: parseScore(ACT_Total) || 0,
+    };
+  });
+
+  // Sort appointments (descending)
   const sortedAppointments = [...(studentData.homeworkCompletion || [])].sort((a, b) => {
     const dateA = a.date ? new Date(a.date) : new Date(0);
     const dateB = b.date ? new Date(b.date) : new Date(0);
@@ -315,7 +428,7 @@ const ParentDashboard = () => {
   });
   const appointmentsToShow = sortedAppointments.slice(startIndex, startIndex + 3);
 
-  // Filter test dates
+  // Filter test dates (only upcoming)
   const testDates = (studentData.testDates || [])
     .filter((test) => {
       const testDateStr = test.test_date;
@@ -328,18 +441,8 @@ const ParentDashboard = () => {
     })
     .sort((a, b) => new Date(a.test_date) - new Date(b.test_date));
 
-  const testData = studentData.testData || [];
-  const satTests = testData.filter((t) => {
-    const upperTest = (t.test || '').toUpperCase();
-    return upperTest.includes('SAT') || upperTest.includes('PSAT');
-  });
-  const actTests = testData.filter((t) => {
-    const upperTest = (t.test || '').toUpperCase();
-    return upperTest.includes('ACT');
-  });
-
   // Score parsing
-  const renderSATScores = (testDoc) => {
+  function renderSATScores(testDoc) {
     let EBRW = '';
     let Math = '';
     let Reading = '';
@@ -351,8 +454,10 @@ const ParentDashboard = () => {
       [EBRW, Math, Reading, Writing, SAT_Total] = testDoc.SAT;
     }
     return { EBRW, Math, Reading, Writing, SAT_Total };
-  };
-  const renderACTScores = (testDoc) => {
+  }
+
+  function renderACTScores(testDoc) {
+    // We'll store the second index as MathVal for clarity
     let English = '';
     let MathVal = '';
     let Reading = '';
@@ -363,175 +468,252 @@ const ParentDashboard = () => {
     } else if (Array.isArray(testDoc.ACT) && testDoc.ACT.length > 0) {
       [English, MathVal, Reading, Science, ACT_Total] = testDoc.ACT;
     }
-    return { English, Math: MathVal, Reading, Science, ACT_Total };
-  };
+    return { English, MathVal, Reading, Science, ACT_Total };
+  }
 
-  // Different heading size on mobile
-  const heroHeadingVariant = isMobile ? 'h4' : 'h3';
+  // For the mobile cards: we compute changes with correct field names
+  function getActPercentChanges(currentDoc, prevDoc) {
+    if (!prevDoc) {
+      return {
+        ePercent: null,
+        mPercent: null,
+        rPercent: null,
+        sPercent: null,
+        tPercent: null,
+      };
+    }
+
+    const currScores = renderACTScores(currentDoc);
+    const prevScores = renderACTScores(prevDoc);
+
+    // Use the same "MathVal" naming
+    const ePercent = computePercentageChange(
+      parseScore(prevScores.English),
+      parseScore(currScores.English)
+    );
+    const mPercent = computePercentageChange(
+      parseScore(prevScores.MathVal),
+      parseScore(currScores.MathVal)
+    );
+    const rPercent = computePercentageChange(
+      parseScore(prevScores.Reading),
+      parseScore(currScores.Reading)
+    );
+    const sPercent = computePercentageChange(
+      parseScore(prevScores.Science),
+      parseScore(currScores.Science)
+    );
+    const tPercent = computePercentageChange(
+      parseScore(prevScores.ACT_Total),
+      parseScore(currScores.ACT_Total)
+    );
+
+    return { ePercent, mPercent, rPercent, sPercent, tPercent };
+  }
+
+  function getSatPercentChanges(currentDoc, prevDoc) {
+    if (!prevDoc) {
+      return {
+        ePercent: null,
+        mPercent: null,
+        rPercent: null,
+        wPercent: null,
+        tPercent: null,
+      };
+    }
+
+    const currScores = renderSATScores(currentDoc);
+    const prevScores = renderSATScores(prevDoc);
+
+    const ePercent = computePercentageChange(
+      parseScore(prevScores.EBRW),
+      parseScore(currScores.EBRW)
+    );
+    const mPercent = computePercentageChange(
+      parseScore(prevScores.Math),
+      parseScore(currScores.Math)
+    );
+    const rPercent = computePercentageChange(
+      parseScore(prevScores.Reading),
+      parseScore(currScores.Reading)
+    );
+    const wPercent = computePercentageChange(
+      parseScore(prevScores.Writing),
+      parseScore(currScores.Writing)
+    );
+    const tPercent = computePercentageChange(
+      parseScore(prevScores.SAT_Total),
+      parseScore(currScores.SAT_Total)
+    );
+
+    return { ePercent, mPercent, rPercent, wPercent, tPercent };
+  }
 
   return (
     <RootContainer>
-      {/* ------------- AppBar ------------- */}
+      {/* ---------- AppBar ---------- */}
       <StyledAppBar position="static" elevation={3}>
-  <Toolbar
-    disableGutters
-    sx={{ 
-      // Small left/right padding so it's not flush, but less than default
-      px: 2 
-    }}
-  >
-    {isMobile ? (
-      <Box 
-        sx={{ 
-          width: '100%',
-          // Slight horizontal padding for the content
-          px: 2 
-        }}
-      >
-        {/* Top row: "Welcome..." + Sign Out aligned right */}
-        <Box
+        <Toolbar
+          disableGutters
           sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            width: '100%',
-            mb: 1,
+            px: 2,
+            py: 1,
           }}
         >
-          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-            Welcome, {parentName}!
-          </Typography>
+          {isMobile ? (
+            <Box sx={{ width: '100%' }}>
+              {/* Top row: Welcome + Sign Out (single line) */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  width: '100%',
+                  mb: 1,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontWeight: 'bold',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  Welcome, {parentName}!
+                </Typography>
 
-          <Button
-            onClick={handleSignOut}
-            variant="contained"
-            sx={{
-              backgroundColor: brandGold,
-              color: '#fff',
-              fontWeight: 'bold',
-              textTransform: 'none',
-              // Slight margin on the right if you want a bit of space from the edge
-              mr: 0.5, 
-              '&:hover': {
-                backgroundColor: '#d4a100',
-              },
-            }}
-          >
-            Sign Out
-          </Button>
-        </Box>
+                <Button
+                  onClick={handleSignOut}
+                  variant="contained"
+                  sx={{
+                    backgroundColor: brandGold,
+                    color: '#fff',
+                    fontWeight: 'bold',
+                    textTransform: 'none',
+                    whiteSpace: 'nowrap',
+                    mr: 0.5,
+                    '&:hover': {
+                      backgroundColor: '#d4a100',
+                    },
+                  }}
+                >
+                  Sign Out
+                </Button>
+              </Box>
 
-        {/* Second row: Avatar */}
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Avatar
-            src={parentPicture || undefined}
-            alt={parentName}
-            sx={{
-              bgcolor: parentPicture ? 'transparent' : brandGold,
-              color: '#fff',
-            }}
-          >
-            {!parentPicture && parentName.charAt(0).toUpperCase()}
-          </Avatar>
-        </Box>
-      </Box>
-    ) : (
-      // For desktop
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          width: '100%',
-          // A little horizontal padding so it’s not flush
-          px: 2 
-        }}
-      >
-        {/* Left side: Welcome + Avatar */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-            Welcome, {parentName}!
-          </Typography>
-          <Avatar
-            src={parentPicture || undefined}
-            alt={parentName}
-            sx={{
-              bgcolor: parentPicture ? 'transparent' : brandGold,
-              color: '#fff',
-            }}
-          >
-            {!parentPicture && parentName.charAt(0).toUpperCase()}
-          </Avatar>
-        </Box>
+              {/* Second row: Avatar only */}
+              <Box sx={{ display: 'flex', alignItems: 'center', py: 1 }}>
+                <Avatar
+                  src={parentPicture || undefined}
+                  alt={parentName}
+                  sx={{
+                    bgcolor: parentPicture ? 'transparent' : brandGold,
+                    color: '#fff',
+                  }}
+                >
+                  {!parentPicture && parentName.charAt(0).toUpperCase()}
+                </Avatar>
+              </Box>
+            </Box>
+          ) : (
+            // Desktop Layout
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+                px: 2,
+                py: 1,
+              }}
+            >
+              {/* Left side: Welcome + Avatar */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Typography
+                  variant="h5"
+                  sx={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}
+                >
+                  Welcome, {parentName}!
+                </Typography>
+                <Avatar
+                  src={parentPicture || undefined}
+                  alt={parentName}
+                  sx={{
+                    bgcolor: parentPicture ? 'transparent' : brandGold,
+                    color: '#fff',
+                  }}
+                >
+                  {!parentPicture && parentName.charAt(0).toUpperCase()}
+                </Avatar>
+              </Box>
 
-        {/* Right side: Sign Out */}
-        <Button
-          onClick={handleSignOut}
-          variant="contained"
-          sx={{
-            backgroundColor: brandGold,
-            color: '#fff',
-            fontWeight: 'bold',
-            textTransform: 'none',
-            // Slight margin if you want space from the right
-            mr: 0.5,
-            '&:hover': {
-              backgroundColor: '#d4a100',
-            },
-          }}
-        >
-          Sign Out
-        </Button>
-      </Box>
-    )}
-  </Toolbar>
-</StyledAppBar>
+              {/* Right side: Sign Out */}
+              <Button
+                onClick={handleSignOut}
+                variant="contained"
+                sx={{
+                  backgroundColor: brandGold,
+                  color: '#fff',
+                  fontWeight: 'bold',
+                  textTransform: 'none',
+                  whiteSpace: 'nowrap',
+                  mr: 0.5,
+                  '&:hover': {
+                    backgroundColor: '#d4a100',
+                  },
+                }}
+              >
+                Sign Out
+              </Button>
+            </Box>
+          )}
+        </Toolbar>
+      </StyledAppBar>
 
-
-
-
-
-
-      {/* ------------- Hero Section ------------- */}
-      <Container maxWidth="xl">
+      {/* ---------- Hero Section ---------- */}
+      <Container maxWidth="xl" sx={{ marginTop: '24px' }}>
         <HeroSection>
-          {/* First row: Student Name (left), Dropdown (right) */}
+          {/* Single line: "Dashboard Overview for:" + dropdown */}
           <Box
             display="flex"
             alignItems="center"
-            justifyContent={isMobile ? 'space-between' : 'space-between'}
-            flexWrap="wrap"
+            flexWrap="nowrap"
+            gap={2}
+            sx={{ whiteSpace: 'nowrap' }}
           >
             <Typography
-              variant={heroHeadingVariant}
-              sx={{ fontWeight: 700, marginBottom: isMobile ? '8px' : '0' }}
+              variant={isMobile ? 'h6' : 'h5'}
+              sx={{ fontWeight: 700, m: 0 }}
             >
-              Dashboard Overview for: {/* Test {studentData.personal?.name || 'Student'} */}
+              Overview for:
             </Typography>
 
-            <Box sx={{ marginLeft: 'auto' }}>
-              <Select
-                value={selectedStudentID}
-                onChange={handleStudentChange}
-                variant="outlined"
-                sx={{
-                  minWidth: isMobile ? '150px' : '200px',
-                  backgroundColor: '#fff',
-                  borderRadius: '8px',
-                  fontWeight: 500,
-                }}
-              >
-                {associatedStudents.map((student) => (
-                  <MenuItem key={student} value={student}>
-                    {student}
-                  </MenuItem>
-                ))}
-              </Select>
-            </Box>
+            <Select
+              size="small"
+              value={selectedStudentID}
+              onChange={handleStudentChange}
+              variant="outlined"
+              sx={{
+                height: 40,
+                backgroundColor: '#fff',
+                borderRadius: '8px',
+                fontWeight: 500,
+                minWidth: isMobile ? 140 : 180,
+              }}
+            >
+              {associatedStudents.map((student) => (
+                <MenuItem key={student} value={student}>
+                  {student}
+                </MenuItem>
+              ))}
+            </Select>
           </Box>
 
-          {/* Second row: The descriptive text */}
+          {/* Second row: descriptive text */}
           <Box mt={2}>
             <Typography
               variant={isMobile ? 'body1' : 'h6'}
@@ -592,7 +774,7 @@ const ParentDashboard = () => {
                 onChange={(e) => {
                   setActiveTab(Number(e.target.value));
                 }}
-                sx={{ minWidth: 160 }}
+                sx={{ minWidth: 220 }}
               >
                 {tabLabels.map((label, idx) => (
                   <MenuItem key={label} value={String(idx)}>
@@ -619,7 +801,9 @@ const ParentDashboard = () => {
             </Box>
           )}
 
-          {/* Tab Panels */}
+          {/* =================== TAB PANELS =================== */}
+
+          {/* ============== Recent Appointments ============== */}
           <TabPanel value={activeTab} index={0}>
             <SectionContainer>
               <SectionTitle variant="h6">Recent Appointments</SectionTitle>
@@ -635,10 +819,7 @@ const ParentDashboard = () => {
                   <KeyboardArrowUpIcon fontSize="large" />
                 </IconButton>
 
-                {/* 
-                  Desktop: Slide with ±10% offset
-                  Mobile: No animation — just a <Box> containing the appointments
-                */}
+                {/* Desktop: Slide with ±10% offset; Mobile: no animation */}
                 {!isMobile ? (
                   <Slide
                     key={startIndex}
@@ -648,7 +829,7 @@ const ParentDashboard = () => {
                     mountOnEnter
                     unmountOnExit
                     onEnter={(node) => {
-                      const offset = '10%'; // Original partial slide
+                      const offset = '10%';
                       node.style.transform =
                         scrollDirection === 'down'
                           ? `translateY(-${offset})`
@@ -669,7 +850,6 @@ const ParentDashboard = () => {
                                 day: 'numeric',
                               })
                             : 'N/A';
-
                           const duration = '1 hr';
                           const status = 'Attended';
                           const percentage = appt.percentage || '0%';
@@ -711,7 +891,6 @@ const ParentDashboard = () => {
                               day: 'numeric',
                             })
                           : 'N/A';
-
                         const duration = '1 hr';
                         const status = 'Attended';
                         const percentage = appt.percentage || '0%';
@@ -753,93 +932,114 @@ const ParentDashboard = () => {
             </SectionContainer>
           </TabPanel>
 
-          <TabPanel value={activeTab} index={1}>
-  <SectionContainer>
-    <Divider sx={{ marginBottom: '16px' }} />
+         {/* ============== School Goals ============== */}
+         <TabPanel value={activeTab} index={1}>
+          <SectionContainer>
+            <Divider sx={{ marginBottom: '16px' }} />
 
-    {(studentData.goals || []).length > 0 ? (
-      /* Make table scrollable on mobile to avoid awkward wrapping */
-      <TableContainer
-        sx={{
-          overflowX: {
-            xs: 'auto',  // Scroll on small screens
-            md: 'visible', // Normal on desktops
-          },
-        }}
-      >
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell
+            {(studentData.goals || []).length > 0 ? (
+              <TableContainer
                 sx={{
-                  fontWeight: 600,
-                  whiteSpace: 'nowrap', // Force single-line
+                  overflowX: {
+                    xs: 'auto',  // Scroll on small screens if needed
+                    md: 'visible',
+                  },
                 }}
               >
-                School
-              </TableCell>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      {/* Center the School column header */}
+                      <TableCell
+                        align="center"
+                        sx={{
+                          fontWeight: 600,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        School
+                      </TableCell>
 
-              <TableCell
-                sx={{
-                  fontWeight: 600,
-                  whiteSpace: 'nowrap', // Force single-line
-                }}
-              >
-                ACT Percentile (25th, 50th, 75th)
-              </TableCell>
+                      {/* Center the Percentile column header */}
+                      <TableCell
+                        align="center"
+                        sx={{
+                          fontWeight: 600,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        Percentile (25th, 50th, 75th)
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
 
-              <TableCell
-                sx={{
-                  fontWeight: 600,
-                  whiteSpace: 'nowrap', // Force single-line
-                }}
-              >
-                SAT Percentile (25th, 50th, 75th)
-              </TableCell>
-            </TableRow>
-          </TableHead>
+                  <TableBody>
+                    {studentData.goals.map((goal, index) => {
+                      const schoolName = goal.university || goal.College || 'N/A';
 
-          <TableBody>
-            {studentData.goals.map((goal, index) => {
-              const schoolName = goal.university || goal.College || 'N/A';
+                      // Ensure ACT_percentiles is joined by comma + space
+                      const actPercentile =
+                        goal.ACT_percentiles && goal.ACT_percentiles !== 'N/A'
+                          ? Array.isArray(goal.ACT_percentiles)
+                            ? goal.ACT_percentiles.join(', ')
+                            : goal.ACT_percentiles
+                          : 'No data';
 
-              // Build ACT array the original way (no "ACT:" prefix)
-              const actArray = [];
-              if (goal.ACT_percentiles && goal.ACT_percentiles !== 'N/A') {
-                actArray.push(goal.ACT_percentiles);
-              }
-              const actPercentile =
-                actArray.length > 0 ? actArray.join(', ') : 'No data';
+                      // Ensure SAT_percentiles is joined by comma + space
+                      const satPercentile =
+                        goal.SAT_percentiles && goal.SAT_percentiles !== 'N/A'
+                          ? Array.isArray(goal.SAT_percentiles)
+                            ? goal.SAT_percentiles.join(', ')
+                            : goal.SAT_percentiles
+                          : 'No data';
 
-              // Build SAT array the original way (no "SAT:" prefix)
-              const satArray = [];
-              if (goal.SAT_percentiles && goal.SAT_percentiles !== 'N/A') {
-                satArray.push(goal.SAT_percentiles);
-              }
-              const satPercentile =
-                satArray.length > 0 ? satArray.join(', ') : 'No data';
+                      return (
+                        <TableRow key={index}>
+                          {/* Center the School column values */}
+                          <TableCell align="center">{schoolName}</TableCell>
 
-              return (
-                <TableRow key={index}>
-                  <TableCell>{schoolName}</TableCell>
-                  <TableCell>{actPercentile}</TableCell>
-                  <TableCell>{satPercentile}</TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    ) : (
-      <Typography variant="body2" color="textSecondary">
-        No school goals available.
-      </Typography>
-    )}
-  </SectionContainer>
-</TabPanel>
+                          {/* Center the ACT/SAT box */}
+                          <TableCell align="center">
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',  // Center horizontally
+                              }}
+                            >
+                              <Box sx={{ mr: 2, textAlign: 'center' }}>
+                                <Typography variant="subtitle2">ACT</Typography>
+                                <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+                                  {actPercentile}
+                                </Typography>
+                              </Box>
+
+                              <Divider orientation="vertical" flexItem />
+
+                              <Box sx={{ ml: 2, textAlign: 'center' }}>
+                                <Typography variant="subtitle2">SAT</Typography>
+                                <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+                                  {satPercentile}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            ) : (
+              <Typography variant="body2" color="textSecondary">
+                No school goals available.
+              </Typography>
+            )}
+          </SectionContainer>
+        </TabPanel>
 
 
-
+          {/* ============== Student Profile ============== */}
           <TabPanel value={activeTab} index={2}>
             <SectionContainer>
               <SectionTitle variant="h6">Student Profile</SectionTitle>
@@ -869,305 +1069,596 @@ const ParentDashboard = () => {
             </SectionContainer>
           </TabPanel>
 
+          {/* ============== Test Data ============== */}
           <TabPanel value={activeTab} index={3}>
-  {/* 
-    For desktop: regular 2-column layout (Dates on the left, Scores on the right)
-    For mobile: Test Scores first, then Testing Dates 
-  */}
-  <Grid
-    container
-    spacing={4}
-    direction={isMobile ? 'column' : 'row'} 
-  >
-    {/* MOBILE: Show first (order xs=1), DESKTOP: On the right (md=10, order md=2) -> Test Scores */}
-    <Grid item xs={12} md={10} order={{ xs: 1, md: 2 }}>
-      <SectionContainer>
-        <SectionTitle variant="h6">Test Scores</SectionTitle>
-        <Divider sx={{ marginBottom: '16px' }} />
+          <Grid container spacing={4} direction={isMobile ? 'column' : 'row'}>
+            {/* Right side: Test Scores (or top on mobile) */}
+            <Grid item xs={12} md={10} order={{ xs: 1, md: 2 }}>
+              <SectionContainer>
+                <SectionTitle variant="h6">Test Scores</SectionTitle>
+                <Divider sx={{ marginBottom: '16px' }} />
 
-        {/* ================== SAT Scores ================== */}
-        <Typography variant="h6" sx={{ fontWeight: 600, marginTop: '16px' }}>
-          SAT Scores
-        </Typography>
+                {/* ================== SAT Scores ================== */}
+                <Typography variant="h6" sx={{ fontWeight: 600, marginTop: '16px' }}>
+                  SAT Scores
+                </Typography>
 
-        {/*
-          1) Create a copy of satTests array (so we don't mutate the original).
-          2) Sort it by descending date: newest first.
-        */}
-        {(() => {
-          const sortedSatTests = [...satTests].sort((a, b) => {
-            // Convert each .date to a JS Date, and compare
-            const dateA = new Date(a.date || 0);
-            const dateB = new Date(b.date || 0);
-            return dateB - dateA; // descending order
-          });
+                {lineDataSAT.length > 0 ? (
+                  <Box sx={{ mt: 2, height: 300, width: '100%' }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={lineDataSAT}
+                        margin={{ top: 20, right: 20, left: 20, bottom: 20 }}
+                      >
+                        <CartesianGrid stroke="#ccc" strokeDasharray="5 5" />
+                        <XAxis dataKey="name" />
+                        <YAxis
+                          domain={[
+                            (dataMin) => Math.max(0, dataMin - 2), 
+                            (dataMax) => dataMax + 2,
+                          ]}
+                          allowDecimals={false}
+                        />
+                        <Tooltip />
+                        <Legend />
+                        <Line
+                          type="monotone"
+                          dataKey="EBRW"
+                          stroke={brandGold}
+                          strokeWidth={2}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="Math"
+                          stroke={brandGoldLight}
+                          strokeWidth={2}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="Reading"
+                          stroke={brandGoldLighter}
+                          strokeWidth={2}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="Writing"
+                          stroke={brandBlueLight}
+                          strokeWidth={2}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="Total"
+                          stroke={brandBlue}
+                          strokeWidth={3}
+                          dot
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
+                    No SAT data to graph.
+                  </Typography>
+                )}
 
-          if (!isMobile) {
-            // ------ DESKTOP TABLE VIEW ------
-            return (
-              <TableContainer sx={{ marginBottom: '24px' }}>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 600, verticalAlign: 'top' }}>
-                        Date
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 600, verticalAlign: 'top' }}>
-                        Test (Type)
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 600, verticalAlign: 'top' }}>EBRW</TableCell>
-                      <TableCell sx={{ fontWeight: 600, verticalAlign: 'top' }}>Math</TableCell>
-                      <TableCell sx={{ fontWeight: 600, verticalAlign: 'top' }}>Reading</TableCell>
-                      <TableCell sx={{ fontWeight: 600, verticalAlign: 'top' }}>Writing</TableCell>
-                      <TableCell sx={{ fontWeight: 600, verticalAlign: 'top' }}>
-                        SAT Total
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {sortedSatTests.length > 0 ? (
-                      sortedSatTests.map((testDoc, index) => {
-                        const { EBRW, Math, Reading, Writing, SAT_Total } = renderSATScores(
+                {/* Desktop vs. Mobile: SAT */}
+                {!isMobile ? (
+                  /* ========== DESKTOP TABLE (SAT) ========== */
+                  <Box sx={{ mt: 4 }}>
+                    <TableContainer>
+                      <Table>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Date</TableCell>
+                            <TableCell>Test (Type)</TableCell>
+                            <TableCell>EBRW</TableCell>
+                            <TableCell>Math</TableCell>
+                            <TableCell>Reading</TableCell>
+                            <TableCell>Writing</TableCell>
+                            <TableCell>Total</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {[...satTests]
+                            .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+                            .map((testDoc, index, arr) => {
+                              const { EBRW, Math, Reading, Writing, SAT_Total } = renderSATScores(testDoc);
+
+                              // The older test is next in the array
+                              const prevDoc = arr[index + 1];
+
+                              const dateStr = testDoc.date || 'N/A';
+                              const testLabel = `${testDoc.test || 'N/A'} (${testDoc.type || 'N/A'})`;
+
+                              return (
+                                <React.Fragment key={index}>
+                                  {/* Row #1: raw scores */}
+                                  <TableRow>
+                                    <TableCell>{dateStr}</TableCell>
+                                    <TableCell>{testLabel}</TableCell>
+                                    <TableCell>{EBRW}</TableCell>
+                                    <TableCell>{Math}</TableCell>
+                                    <TableCell>{Reading}</TableCell>
+                                    <TableCell>{Writing}</TableCell>
+                                    <TableCell>{SAT_Total}</TableCell>
+                                  </TableRow>
+
+                                  {/* Row #2: Score Change */}
+                                  <TableRow>
+                                    <TableCell colSpan={2} sx={{ fontWeight: 600 }}>
+                                      {prevDoc ? 'Score Change (%)' : 'Baseline'}
+                                    </TableCell>
+                                    <TableCell>
+                                      {prevDoc
+                                        ? renderChangeChip(
+                                            parseScore(prevDoc.SAT_Scores?.[0] || 0),
+                                            parseScore(EBRW)
+                                          )
+                                        : '—'}
+                                    </TableCell>
+                                    <TableCell>
+                                      {prevDoc
+                                        ? renderChangeChip(
+                                            parseScore(prevDoc.SAT_Scores?.[1] || 0),
+                                            parseScore(Math)
+                                          )
+                                        : '—'}
+                                    </TableCell>
+                                    <TableCell>
+                                      {prevDoc
+                                        ? renderChangeChip(
+                                            parseScore(prevDoc.SAT_Scores?.[2] || 0),
+                                            parseScore(Reading)
+                                          )
+                                        : '—'}
+                                    </TableCell>
+                                    <TableCell>
+                                      {prevDoc
+                                        ? renderChangeChip(
+                                            parseScore(prevDoc.SAT_Scores?.[3] || 0),
+                                            parseScore(Writing)
+                                          )
+                                        : '—'}
+                                    </TableCell>
+                                    <TableCell>
+                                      {prevDoc
+                                        ? renderChangeChip(
+                                            parseScore(prevDoc.SAT_Scores?.[4] || 0),
+                                            parseScore(SAT_Total)
+                                          )
+                                        : '—'}
+                                    </TableCell>
+                                  </TableRow>
+
+                                  <TableRow>
+                                    <TableCell colSpan={7} sx={{ px: 0 }}>
+                                      <Divider
+                                        sx={{
+                                          my: 2,
+                                          borderColor: 'black',
+                                          borderWidth: 2,
+                                        }}
+                                      />
+                                    </TableCell>
+                                  </TableRow>
+                                </React.Fragment>
+                              );
+                            })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Box>
+                ) : (
+                  /* ========== MOBILE CARDS (SAT) ========== */
+                  <Box sx={{ mt: 4 }}>
+                    {[...satTests]
+                      .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+                      .map((testDoc, index, arr) => {
+                        const { EBRW, Math, Reading, Writing, SAT_Total } = renderSATScores(testDoc);
+                        const prevDoc = arr[index + 1];
+                        const dateStr = testDoc.date || 'N/A';
+                        const testLabel = `${testDoc.test || 'N/A'} (${testDoc.type || 'N/A'})`;
+
+                        return (
+                          <Paper
+                            key={index}
+                            sx={{
+                              mb: 2,
+                              p: 2,
+                              borderRadius: '12px',
+                              boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
+                            }}
+                          >
+                            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                              {dateStr} — {testLabel}
+                            </Typography>
+
+                            <Typography variant="body2">
+                              <strong>EBRW:</strong> {EBRW}
+                            </Typography>
+                            <Typography variant="body2">
+                              <strong>Math:</strong> {Math}
+                            </Typography>
+                            <Typography variant="body2">
+                              <strong>Reading:</strong> {Reading}
+                            </Typography>
+                            <Typography variant="body2">
+                              <strong>Writing:</strong> {Writing}
+                            </Typography>
+                            <Typography variant="body2">
+                              <strong>Total:</strong> {SAT_Total}
+                            </Typography>
+
+                            <Box sx={{ mt: 1, fontWeight: 600 }}>
+                              {prevDoc ? (
+                                <Typography
+                                  variant="body2"
+                                  sx={{ mb: 0.5, fontWeight: 'bold' }}
+                                >
+                                  Score Change (%):
+                                </Typography>
+                              ) : (
+                                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                                  Baseline
+                                </Typography>
+                              )}
+
+                              {prevDoc && (
+                                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                                  <Box display="flex" alignItems="center" gap={0.5}>
+                                    <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                                      EBRW:
+                                    </Typography>
+                                    {renderChangeChip(
+                                      parseScore(prevDoc.SAT_Scores?.[0] || 0),
+                                      parseScore(EBRW)
+                                    )}
+                                  </Box>
+                                  <Box display="flex" alignItems="center" gap={0.5}>
+                                    <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                                      Math:
+                                    </Typography>
+                                    {renderChangeChip(
+                                      parseScore(prevDoc.SAT_Scores?.[1] || 0),
+                                      parseScore(Math)
+                                    )}
+                                  </Box>
+                                  <Box display="flex" alignItems="center" gap={0.5}>
+                                    <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                                      Reading:
+                                    </Typography>
+                                    {renderChangeChip(
+                                      parseScore(prevDoc.SAT_Scores?.[2] || 0),
+                                      parseScore(Reading)
+                                    )}
+                                  </Box>
+                                  <Box display="flex" alignItems="center" gap={0.5}>
+                                    <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                                      Writing:
+                                    </Typography>
+                                    {renderChangeChip(
+                                      parseScore(prevDoc.SAT_Scores?.[3] || 0),
+                                      parseScore(Writing)
+                                    )}
+                                  </Box>
+                                  <Box display="flex" alignItems="center" gap={0.5}>
+                                    <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                                      Total:
+                                    </Typography>
+                                    {renderChangeChip(
+                                      parseScore(prevDoc.SAT_Scores?.[4] || 0),
+                                      parseScore(SAT_Total)
+                                    )}
+                                  </Box>
+                                </Box>
+                              )}
+                            </Box>
+                          </Paper>
+                        );
+                      })}
+                  </Box>
+                )}
+
+                {/* ================== ACT Scores ================== */}
+                <Typography variant="h6" sx={{ fontWeight: 600, marginTop: '32px' }}>
+                  ACT Scores
+                </Typography>
+
+                {lineDataACT.length > 0 ? (
+                  <Box sx={{ mt: 2, height: 300, width: '100%' }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={lineDataACT}
+                        margin={{ top: 20, right: 20, left: 20, bottom: 20 }}
+                      >
+                        <CartesianGrid stroke="#ccc" strokeDasharray="5 5" />
+                        <XAxis dataKey="name" />
+                        <YAxis
+                          domain={[
+                            (dataMin) => Math.max(0, dataMin - 2),
+                            (dataMax) => dataMax + 2,
+                          ]}
+                          allowDecimals={false}
+                        />
+                        <Tooltip />
+                        <Legend />
+                        <Line
+                          type="monotone"
+                          dataKey="English"
+                          stroke={brandGold}
+                          strokeWidth={2}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="Math"
+                          stroke={brandGoldLight}
+                          strokeWidth={2}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="Reading"
+                          stroke={brandGoldLighter}
+                          strokeWidth={2}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="Science"
+                          stroke={brandBlueLight}
+                          strokeWidth={2}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="Total"
+                          stroke={brandBlue}
+                          strokeWidth={3}
+                          dot
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
+                    No ACT data to graph.
+                  </Typography>
+                )}
+
+                {/* Desktop vs. Mobile: ACT */}
+                {!isMobile ? (
+                  /* ========== DESKTOP TABLE (ACT) ========== */
+                  <Box sx={{ mt: 4 }}>
+                    <TableContainer>
+                      <Table>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Date</TableCell>
+                            <TableCell>Test (Type)</TableCell>
+                            <TableCell>English</TableCell>
+                            <TableCell>Math</TableCell>
+                            <TableCell>Reading</TableCell>
+                            <TableCell>Science</TableCell>
+                            <TableCell>Total</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {[...actTests]
+                            .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+                            .map((testDoc, index, arr) => {
+                              const { English, MathVal, Reading, Science, ACT_Total } = renderACTScores(
+                                testDoc
+                              );
+                              const prevDoc = arr[index + 1];
+
+                              // If there's an older test, compute the differences
+                              let oldScores = null;
+                              if (prevDoc) {
+                                oldScores = renderACTScores(prevDoc);
+                              }
+
+                              const dateStr = testDoc.date || 'N/A';
+                              const testLabel = `${testDoc.test || 'N/A'} (${testDoc.type || 'N/A'})`;
+
+                              return (
+                                <React.Fragment key={index}>
+                                  {/* Row #1: raw scores */}
+                                  <TableRow>
+                                    <TableCell>{dateStr}</TableCell>
+                                    <TableCell>{testLabel}</TableCell>
+                                    <TableCell>{English}</TableCell>
+                                    <TableCell>{MathVal}</TableCell>
+                                    <TableCell>{Reading}</TableCell>
+                                    <TableCell>{Science}</TableCell>
+                                    <TableCell>{ACT_Total}</TableCell>
+                                  </TableRow>
+
+                                  {/* Row #2: Score Change */}
+                                  <TableRow>
+                                    <TableCell colSpan={2} sx={{ fontWeight: 600 }}>
+                                      {prevDoc ? 'Score Change (%)' : 'Baseline'}
+                                    </TableCell>
+                                    <TableCell>
+                                      {prevDoc
+                                        ? renderChangeChip(
+                                            parseScore(oldScores?.English),
+                                            parseScore(English)
+                                          )
+                                        : '—'}
+                                    </TableCell>
+                                    <TableCell>
+                                      {prevDoc
+                                        ? renderChangeChip(
+                                            parseScore(oldScores?.MathVal),
+                                            parseScore(MathVal)
+                                          )
+                                        : '—'}
+                                    </TableCell>
+                                    <TableCell>
+                                      {prevDoc
+                                        ? renderChangeChip(
+                                            parseScore(oldScores?.Reading),
+                                            parseScore(Reading)
+                                          )
+                                        : '—'}
+                                    </TableCell>
+                                    <TableCell>
+                                      {prevDoc
+                                        ? renderChangeChip(
+                                            parseScore(oldScores?.Science),
+                                            parseScore(Science)
+                                          )
+                                        : '—'}
+                                    </TableCell>
+                                    <TableCell>
+                                      {prevDoc
+                                        ? renderChangeChip(
+                                            parseScore(oldScores?.ACT_Total),
+                                            parseScore(ACT_Total)
+                                          )
+                                        : '—'}
+                                    </TableCell>
+                                  </TableRow>
+
+                                  <TableRow>
+                                    <TableCell colSpan={7} sx={{ px: 0 }}>
+                                      <Divider
+                                        sx={{
+                                          my: 2,
+                                          borderColor: 'black',
+                                          borderWidth: 2,
+                                        }}
+                                      />
+                                    </TableCell>
+                                  </TableRow>
+                                </React.Fragment>
+                              );
+                            })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Box>
+                ) : (
+                  /* ========== MOBILE CARDS (ACT) ========== */
+                  <Box sx={{ mt: 4 }}>
+                    {[...actTests]
+                      .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+                      .map((testDoc, index, arr) => {
+                        const { English, MathVal, Reading, Science, ACT_Total } = renderACTScores(
                           testDoc
                         );
-                        return (
-                          <TableRow key={index}>
-                            <TableCell sx={{ verticalAlign: 'top' }}>
-                              {testDoc.date || 'N/A'}
-                            </TableCell>
-                            <TableCell sx={{ verticalAlign: 'top' }}>
-                              {(testDoc.test || 'N/A')} ({testDoc.type || 'N/A'})
-                            </TableCell>
-                            <TableCell sx={{ verticalAlign: 'top' }}>{EBRW}</TableCell>
-                            <TableCell sx={{ verticalAlign: 'top' }}>{Math}</TableCell>
-                            <TableCell sx={{ verticalAlign: 'top' }}>{Reading}</TableCell>
-                            <TableCell sx={{ verticalAlign: 'top' }}>{Writing}</TableCell>
-                            <TableCell sx={{ verticalAlign: 'top' }}>{SAT_Total}</TableCell>
-                          </TableRow>
-                        );
-                      })
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={7}>
-                          <Typography variant="body2" color="textSecondary">
-                            No SAT tests available.
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            );
-          } else {
-            // ------ MOBILE CARD VIEW ------
-            return (
-              <Box sx={{ marginBottom: '24px' }}>
-                {sortedSatTests.length > 0 ? (
-                  sortedSatTests.map((testDoc, index) => {
-                    const { EBRW, Math, Reading, Writing, SAT_Total } = renderSATScores(testDoc);
-                    // Combine Date + Test (Type) into one bold title
-                    const combinedTitle = `${testDoc.date || 'N/A'} — ${
-                      testDoc.test || 'N/A'
-                    } (${testDoc.type || 'N/A'})`;
+                        const prevDoc = arr[index + 1];
 
-                    return (
-                      <Paper
-                        key={index}
-                        sx={{
-                          mb: 2,
-                          p: 2,
-                          borderRadius: '12px',
-                          boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
-                        }}
-                      >
-                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                          {combinedTitle}
-                        </Typography>
-                        <Typography variant="body2" sx={{ mb: 0.5 }}>
-                          EBRW: {EBRW}
-                        </Typography>
-                        <Typography variant="body2" sx={{ mb: 0.5 }}>
-                          Math: {Math}
-                        </Typography>
-                        <Typography variant="body2" sx={{ mb: 0.5 }}>
-                          Reading: {Reading}
-                        </Typography>
-                        <Typography variant="body2" sx={{ mb: 0.5 }}>
-                          Writing: {Writing}
-                        </Typography>
-                        <Typography variant="body2">SAT Total: {SAT_Total}</Typography>
-                      </Paper>
-                    );
-                  })
+                        const dateStr = testDoc.date || 'N/A';
+                        const testLabel = `${testDoc.test || 'N/A'} (${testDoc.type || 'N/A'})`;
+
+                        // For each field, only compute diffs if prevDoc exists
+                        function makeDiffObject(oldScoreIndex, newScoreStr) {
+                          const oldVal = prevDoc
+                            ? parseScore(prevDoc.ACT_Scores?.[oldScoreIndex])
+                            : null;
+                          const newVal = parseScore(newScoreStr);
+                          if (oldVal === null || newVal === null) return null;
+                          const diff = newVal - oldVal;
+                          return diff !== 0 ? { oldVal, newVal } : null;
+                        }
+
+                        const changes = [
+                          { label: 'English', diffs: makeDiffObject(0, English) },
+                          { label: 'Math', diffs: makeDiffObject(1, MathVal) },
+                          { label: 'Reading', diffs: makeDiffObject(2, Reading) },
+                          { label: 'Science', diffs: makeDiffObject(3, Science) },
+                          { label: 'Total', diffs: makeDiffObject(4, ACT_Total) },
+                        ].filter((item) => item.diffs !== null);
+
+                        return (
+                          <Paper
+                            key={index}
+                            sx={{
+                              mb: 2,
+                              p: 2,
+                              borderRadius: '12px',
+                              boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
+                            }}
+                          >
+                            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                              {dateStr} — {testLabel}
+                            </Typography>
+
+                            <Typography variant="body2">
+                              <strong>English:</strong> {English}
+                            </Typography>
+                            <Typography variant="body2">
+                              <strong>Math:</strong> {MathVal}
+                            </Typography>
+                            <Typography variant="body2">
+                              <strong>Reading:</strong> {Reading}
+                            </Typography>
+                            <Typography variant="body2">
+                              <strong>Science:</strong> {Science}
+                            </Typography>
+                            <Typography variant="body2">
+                              <strong>Total:</strong> {ACT_Total}
+                            </Typography>
+
+                            {prevDoc && changes.length > 0 ? (
+                              <Box sx={{ mt: 1, fontWeight: 600 }}>
+                                <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 'bold' }}>
+                                  Score Change (%):
+                                </Typography>
+                                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                                  {changes.map((item, idx) => (
+                                    <Box
+                                      display="flex"
+                                      alignItems="center"
+                                      gap={0.5}
+                                      key={idx}
+                                    >
+                                      <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                                        {item.label}:
+                                      </Typography>
+                                      {renderChangeChip(
+                                        item.diffs.oldVal,
+                                        item.diffs.newVal
+                                      )}
+                                    </Box>
+                                  ))}
+                                </Box>
+                              </Box>
+                            ) : !prevDoc ? (
+                              <Typography variant="body2" sx={{ mt: 1 }}>
+                                Baseline
+                              </Typography>
+                            ) : null}
+                          </Paper>
+                        );
+                      })}
+                  </Box>
+                )}
+              </SectionContainer>
+            </Grid>
+
+            {/* The test dates on the left (desktop) or last (mobile) */}
+            <Grid item xs={12} md={2} order={{ xs: 2, md: 1 }}>
+              <SectionContainer>
+                <SectionTitle variant="h6">Testing Dates</SectionTitle>
+                <Divider sx={{ marginBottom: '16px' }} />
+                {testDates.length > 0 ? (
+                  testDates.map((test, index) => (
+                    <Box key={index} sx={{ mb: 2 }}>
+                      <ListItemText
+                        primary={test.test_date || 'N/A'}
+                        secondary={test.test_type || 'N/A'}
+                      />
+                      <Divider sx={{ my: 1 }} />
+                    </Box>
+                  ))
                 ) : (
                   <Typography variant="body2" color="textSecondary">
-                    No SAT tests available.
+                    No upcoming tests.
                   </Typography>
                 )}
-              </Box>
-            );
-          }
-        })()}
-
-        {/* ================== ACT Scores ================== */}
-        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          ACT Scores
-        </Typography>
-
-        {(() => {
-          // Similarly, sort the ACT tests by descending date
-          const sortedActTests = [...actTests].sort((a, b) => {
-            const dateA = new Date(a.date || 0);
-            const dateB = new Date(b.date || 0);
-            return dateB - dateA;
-          });
-
-          if (!isMobile) {
-            // ------ DESKTOP TABLE VIEW ------
-            return (
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 600, verticalAlign: 'top' }}>Date</TableCell>
-                      <TableCell sx={{ fontWeight: 600, verticalAlign: 'top' }}>
-                        Test (Type)
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 600, verticalAlign: 'top' }}>English</TableCell>
-                      <TableCell sx={{ fontWeight: 600, verticalAlign: 'top' }}>Math</TableCell>
-                      <TableCell sx={{ fontWeight: 600, verticalAlign: 'top' }}>Reading</TableCell>
-                      <TableCell sx={{ fontWeight: 600, verticalAlign: 'top' }}>Science</TableCell>
-                      <TableCell sx={{ fontWeight: 600, verticalAlign: 'top' }}>
-                        ACT Total
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {sortedActTests.length > 0 ? (
-                      sortedActTests.map((testDoc, index) => {
-                        const { English, Math: MathVal, Reading, Science, ACT_Total } =
-                          renderACTScores(testDoc);
-                        return (
-                          <TableRow key={index}>
-                            <TableCell sx={{ verticalAlign: 'top' }}>
-                              {testDoc.date || 'N/A'}
-                            </TableCell>
-                            <TableCell sx={{ verticalAlign: 'top' }}>
-                              {(testDoc.test || 'N/A')} ({testDoc.type || 'N/A'})
-                            </TableCell>
-                            <TableCell sx={{ verticalAlign: 'top' }}>{English}</TableCell>
-                            <TableCell sx={{ verticalAlign: 'top' }}>{MathVal}</TableCell>
-                            <TableCell sx={{ verticalAlign: 'top' }}>{Reading}</TableCell>
-                            <TableCell sx={{ verticalAlign: 'top' }}>{Science}</TableCell>
-                            <TableCell sx={{ verticalAlign: 'top' }}>{ACT_Total}</TableCell>
-                          </TableRow>
-                        );
-                      })
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={7}>
-                          <Typography variant="body2" color="textSecondary">
-                            No ACT tests available.
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            );
-          } else {
-            // ------ MOBILE CARD VIEW ------
-            return (
-              <Box>
-                {sortedActTests.length > 0 ? (
-                  sortedActTests.map((testDoc, index) => {
-                    const { English, Math: MathVal, Reading, Science, ACT_Total } =
-                      renderACTScores(testDoc);
-                    // Combine date + test (type) in one bold line
-                    const combinedTitle = `${testDoc.date || 'N/A'} — ${
-                      testDoc.test || 'N/A'
-                    } (${testDoc.type || 'N/A'})`;
-
-                    return (
-                      <Paper
-                        key={index}
-                        sx={{
-                          mb: 2,
-                          p: 2,
-                          borderRadius: '12px',
-                          boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
-                        }}
-                      >
-                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                          {combinedTitle}
-                        </Typography>
-                        <Typography variant="body2" sx={{ mb: 0.5 }}>
-                          English: {English}
-                        </Typography>
-                        <Typography variant="body2" sx={{ mb: 0.5 }}>
-                          Math: {MathVal}
-                        </Typography>
-                        <Typography variant="body2" sx={{ mb: 0.5 }}>
-                          Reading: {Reading}
-                        </Typography>
-                        <Typography variant="body2" sx={{ mb: 0.5 }}>
-                          Science: {Science}
-                        </Typography>
-                        <Typography variant="body2">ACT Total: {ACT_Total}</Typography>
-                      </Paper>
-                    );
-                  })
-                ) : (
-                  <Typography variant="body2" color="textSecondary">
-                    No ACT tests available.
-                  </Typography>
-                )}
-              </Box>
-            );
-          }
-        })()}
-      </SectionContainer>
-    </Grid>
-
-    {/* MOBILE: Show last (order xs=2), DESKTOP: On the left (md=2, order md=1) -> Testing Dates */}
-    <Grid item xs={12} md={2} order={{ xs: 2, md: 1 }}>
-      <SectionContainer>
-        <SectionTitle variant="h6">Testing Dates</SectionTitle>
-        <Divider sx={{ marginBottom: '16px' }} />
-        {((studentData.testDates || []).length > 0 && (
-          (studentData.testDates || [])
-            .filter((test) => {
-              const testDateStr = test.test_date;
-              if (!testDateStr) return false;
-              const testDate = new Date(testDateStr);
-              if (isNaN(testDate.getTime())) return false;
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              return testDate >= today;
-            })
-            .sort((a, b) => new Date(a.test_date) - new Date(b.test_date))
-            .map((test, index) => (
-              <Box key={index} sx={{ mb: 2 }}>
-                <ListItemText
-                  primary={test.test_date || 'N/A'}
-                  secondary={test.test_type || 'N/A'}
-                  sx={{ paddingLeft: 0 }}
-                />
-                <Divider sx={{ my: 1 }} />
-              </Box>
-            ))
-        )) || (
-          <Typography variant="body2" color="textSecondary">
-            No upcoming tests.
-          </Typography>
-        )}
-      </SectionContainer>
-    </Grid>
-  </Grid>
-</TabPanel>
-
+              </SectionContainer>
+            </Grid>
+          </Grid>
+        </TabPanel>
 
         </ContentWrapper>
       </Container>

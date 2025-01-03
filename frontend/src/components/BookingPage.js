@@ -247,24 +247,19 @@ const BookingPage = () => {
 
   return (
     <Box sx={{ backgroundColor: lightBackground, minHeight: '100vh' }}>
-      {/* ---------------- Updated App Bar to match the request ---------------- */}
-      <StyledAppBar position="static" elevation={3}>
+    <StyledAppBar position="static" elevation={3}>
   <Toolbar
     disableGutters
-    sx={{ 
-      // Keep small horizontal padding, plus a little vertical padding
+    sx={{
+      // Slight left/right padding so it’s not flush
       px: 2,
+      // A bit of vertical padding for better spacing
       py: 1,
     }}
   >
     {isMobile ? (
-      <Box 
-        sx={{ 
-          width: '100%',
-          px: 2,
-        }}
-      >
-        {/* Top row: "Welcome..." + Sign Out aligned right */}
+      <Box sx={{ width: '100%' }}>
+        {/* Top row: Welcome + Sign Out in a single line */}
         <Box
           sx={{
             display: 'flex',
@@ -272,10 +267,20 @@ const BookingPage = () => {
             alignItems: 'center',
             width: '100%',
             mb: 1,
-            py: 1, // Add top/bottom padding for more vertical spacing
+            // Prevent wrapping for text & button
+            whiteSpace: 'nowrap',
           }}
         >
-          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 'bold',
+              // Also ensure no wrapping
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
             Welcome, {parentName}!
           </Typography>
 
@@ -287,7 +292,9 @@ const BookingPage = () => {
               color: '#fff',
               fontWeight: 'bold',
               textTransform: 'none',
-              mr: 0.5, 
+              whiteSpace: 'nowrap',     // Force single line
+              // Provide a small margin if needed
+              mr: 0.5,
               '&:hover': {
                 backgroundColor: '#d4a100',
               },
@@ -297,14 +304,8 @@ const BookingPage = () => {
           </Button>
         </Box>
 
-        {/* Second row: Avatar */}
-        <Box 
-          sx={{ 
-            display: 'flex', 
-            alignItems: 'center',
-            py: 1, // Additional vertical space for the avatar
-          }}
-        >
+        {/* Second row: Avatar only */}
+        <Box sx={{ display: 'flex', alignItems: 'center', py: 1 }}>
           <Avatar
             src={parentPicture || undefined}
             alt={parentName}
@@ -318,7 +319,7 @@ const BookingPage = () => {
         </Box>
       </Box>
     ) : (
-      // For desktop
+      // Desktop Layout
       <Box
         sx={{
           display: 'flex',
@@ -327,12 +328,12 @@ const BookingPage = () => {
           justifyContent: 'space-between',
           width: '100%',
           px: 2,
-          py: 1, // Vertical space on desktop
+          py: 1,
         }}
       >
         {/* Left side: Welcome + Avatar */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+          <Typography variant="h5" sx={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>
             Welcome, {parentName}!
           </Typography>
           <Avatar
@@ -356,6 +357,7 @@ const BookingPage = () => {
             color: '#fff',
             fontWeight: 'bold',
             textTransform: 'none',
+            whiteSpace: 'nowrap', // Ensure single line
             mr: 0.5,
             '&:hover': {
               backgroundColor: '#d4a100',
@@ -368,51 +370,58 @@ const BookingPage = () => {
     )}
   </Toolbar>
 </StyledAppBar>
-
-
       {/* ---------------- Hero Section ---------------- */}
-      {/* ---------------- Hero Section ---------------- */}
-<Container maxWidth="xl" sx={{ marginTop: '24px' }}>
-  <HeroSection>
-    {/* One line: "Booking for:" on left, dropdown on right */}
-    <Box
-      display="flex"
-      alignItems="center"
-      flexWrap="nowrap"          // Prevents text + dropdown from wrapping
-      gap={2}                    // Some space between text & dropdown
-      sx={{
-        whiteSpace: 'nowrap',    // Force single-line
-      }}
-    >
-      <Typography
-        variant={isMobile ? 'h6' : 'h5'}
-        sx={{ fontWeight: 700, m: 0 }}
-      >
-        Booking for:
-      </Typography>
+      <Container maxWidth="xl" sx={{ marginTop: '24px' }}>
+        <HeroSection>
+          {/* One line: "Booking for:" on left, dropdown on right */}
+          <Box
+            display="flex"
+            alignItems="center"
+            flexWrap="nowrap"          // Prevents text + dropdown from wrapping
+            gap={2}                    // Some space between text & dropdown
+            sx={{
+              whiteSpace: 'nowrap',    // Force single-line
+            }}
+          >
+            <Typography
+              variant={isMobile ? 'h6' : 'h5'}
+              sx={{ fontWeight: 700, m: 0 }}
+            >
+              Booking for:
+            </Typography>
 
-      <Select
-        size="small"             // Make the dropdown a bit smaller
-        value={selectedStudentID}
-        onChange={handleStudentChange}
-        variant="outlined"
-        sx={{
-          height: 40,           // Ensure a consistent height
-          backgroundColor: '#fff',
-          borderRadius: '8px',
-          fontWeight: 500,
-          minWidth: isMobile ? 140 : 180, // Adjust for mobile vs. desktop
-        }}
-      >
-        {studentsData.map((student) => (
-          <MenuItem key={student.studentID} value={student.studentID}>
-            {student.personal.name || 'Unnamed Student'}
-          </MenuItem>
-        ))}
-      </Select>
-    </Box>
-  </HeroSection>
-</Container>
+            <Select
+              size="small"             // Make the dropdown a bit smaller
+              value={selectedStudentID}
+              onChange={handleStudentChange}
+              variant="outlined"
+              sx={{
+                height: 40,           // Ensure a consistent height
+                backgroundColor: '#fff',
+                borderRadius: '8px',
+                fontWeight: 500,
+                minWidth: isMobile ? 140 : 180, // Adjust for mobile vs. desktop
+              }}
+            >
+              {studentsData.map((student) => (
+                <MenuItem key={student.studentID} value={student.studentID}>
+                  {student.personal.name || 'Unnamed Student'}
+                </MenuItem>
+              ))}
+            </Select>
+          </Box>
+
+          {/* Second row: The descriptive text */}
+          <Box mt={2}>
+            <Typography
+              variant={isMobile ? 'body1' : 'h6'}
+              sx={{ opacity: 0.9 }}
+            >
+              View feedback directly from the tutors, and book your student's next appointment.
+            </Typography>
+          </Box>
+        </HeroSection>
+      </Container>
 
 
       {/* ---------------- Feedback & Booking Section ---------------- */}
