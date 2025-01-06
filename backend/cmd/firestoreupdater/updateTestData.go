@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"google.golang.org/api/iterator"
 )
@@ -49,32 +50,38 @@ func (app *App) UpdateTestDataHandler(w http.ResponseWriter, r *http.Request) {
 	// Access the 'Test Data' subcollection
 	testDataCollection := studentDocRef.Collection("Test Data")
 
-	// Use the date as provided without any formatting
-	docID := fmt.Sprintf("%s %s", testData.Test, testData.Date)
+	// Create document ID with quality prefix
+	docID := fmt.Sprintf("%s %s %s", testData.Quality, testData.Test, testData.Date)
 
-	// Prepare data to be stored
+	// Initialize data to store
 	data := map[string]interface{}{
-		"date":     testData.Date,
-		"test":     testData.Test,
-		"type":     testData.Quality, // Store 'quality' as 'type'
-		"baseline": testData.Baseline,
+		"date":       testData.Date,
+		"test":       testData.Test,
+		"type":       testData.Quality,
+		"baseline":   testData.Baseline,
+		"updated_at": time.Now().In(loc).Format(time.RFC3339),
 	}
 
-	// Process the 'scores' map to fit into the 'ACT' or 'SAT' field
+	// Prepare scores subdocuments
+	actScores := map[string]interface{}{
+		"English":   nil,
+		"Math":      nil,
+		"Reading":   nil,
+		"Science":   nil,
+		"ACT_Total": nil,
+	}
+	satScores := map[string]interface{}{
+		"EBRW":      nil,
+		"Math":      nil,
+		"Reading":   nil,
+		"Writing":   nil,
+		"SAT_Total": nil,
+	}
+
 	scores := testData.Scores
 
-	// Initialize the scores data
-	var actScores map[string]interface{}
-	var satScores map[string]interface{}
-
 	if testData.Test == "ACT" {
-		// We have an ACT test
-		actScores = make(map[string]interface{})
-
-		// Extract ACT scores
-		if total, ok := scores["composite"]; ok {
-			actScores["ACT Total"] = total
-		}
+		// Populate ACT_Scores
 		if english, ok := scores["english"]; ok {
 			actScores["English"] = english
 		}
@@ -88,44 +95,33 @@ func (app *App) UpdateTestDataHandler(w http.ResponseWriter, r *http.Request) {
 			actScores["Science"] = science
 		}
 
-		data["ACT"] = actScores
-
-		// Check for alternate test's total score (SAT Total)
-		if satTotal, ok := scores["sat_total"]; ok {
-			satScores = make(map[string]interface{})
-			satScores["SAT Total"] = satTotal
-			data["SAT"] = satScores
+		if actTotal, ok := scores["actTotal"].(float64); ok {
+			actScores["ACT_Total"] = actTotal
 		}
 
 	} else if testData.Test == "SAT" || testData.Test == "PSAT" {
-		// We have an SAT or PSAT test
-		satScores = make(map[string]interface{})
-
-		// Extract SAT scores
-		if total, ok := scores["total"]; ok {
-			satScores["SAT Total"] = total
-		}
+		// Populate SAT_Scores
 		if ebrw, ok := scores["ebrw"]; ok {
 			satScores["EBRW"] = ebrw
 		}
 		if math, ok := scores["math"]; ok {
 			satScores["Math"] = math
 		}
-
-		data["SAT"] = satScores
-
-		// Check for alternate test's total score (ACT Total)
-		if actTotal, ok := scores["act_total"]; ok {
-			actScores = make(map[string]interface{})
-			actScores["ACT Total"] = actTotal
-			data["ACT"] = actScores
+		if reading, ok := scores["reading"]; ok {
+			satScores["Reading"] = reading
 		}
-	} else {
-		// Handle unexpected test types
-		log.Printf("Unknown test type: %s", testData.Test)
-		http.Error(w, "Unknown test type", http.StatusBadRequest)
-		return
+		if writing, ok := scores["writing"]; ok {
+			satScores["Writing"] = writing
+		}
+
+		if satTotal, ok := scores["satTotal"].(float64); ok {
+			satScores["SAT_Total"] = satTotal
+		}
 	}
+
+	// Add scores subdocuments to data
+	data["ACT_Scores"] = actScores
+	data["SAT_Scores"] = satScores
 
 	// Create or update the document
 	_, err = testDataCollection.Doc(docID).Set(ctx, data)
