@@ -1,5 +1,3 @@
-// src/components/ParentDashboard.js
-
 import React, { useEffect, useState, useContext } from 'react';
 import { API_BASE_URL } from '../config';
 import { AuthContext } from '../contexts/AuthContext';
@@ -233,6 +231,8 @@ const ParentDashboard = () => {
   const navigate = useNavigate();
 
   // -------------- Data Fetching --------------
+
+  // 1) Check for valid token & fetch parent data
   useEffect(() => {
     const token = localStorage.getItem('authToken');
     if (!token) {
@@ -260,6 +260,33 @@ const ParentDashboard = () => {
       });
   }, [navigate]);
 
+  /**
+   * 2) [NEW USEEFFECT] Attempt Automatic Association
+   *    Then re-fetch associated students to ensure we have updated info.
+   */
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    if (!token) return;
+
+    fetch(`${API_BASE_URL}/api/attemptAutomaticAssociation`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error('Auto-association attempt failed');
+        }
+        const data = await res.json();
+        console.log('Auto-association response:', data);
+        // Re-fetch to update local state
+        fetchAssociatedStudents(token);
+      })
+      .catch((err) => console.error('Auto-association error:', err));
+  }, []);
+
+  // 3) Fetch associated students
   useEffect(() => {
     const token = localStorage.getItem('authToken');
     fetchAssociatedStudents(token);
@@ -289,6 +316,7 @@ const ParentDashboard = () => {
       .catch((err) => console.error(err));
   };
 
+  // 4) When a student is selected, fetch their data
   useEffect(() => {
     if (selectedStudentID) {
       const token = localStorage.getItem('authToken');
@@ -803,45 +831,110 @@ const ParentDashboard = () => {
 
           {/* =================== TAB PANELS =================== */}
 
-          {/* ============== Recent Appointments ============== */}
           <TabPanel value={activeTab} index={0}>
-          <SectionContainer>
-            <SectionTitle variant="h6">Recent Appointments</SectionTitle>
-            <Divider sx={{ marginBottom: '16px' }} />
+            <SectionContainer>
+              <SectionTitle variant="h6">Recent Appointments</SectionTitle>
+              <Divider sx={{ marginBottom: '16px' }} />
 
-            <Box display="flex" flexDirection="column" alignItems="center">
-              {/* Up Arrow */}
-              <IconButton
-                onClick={handlePrevAppointment}
-                disabled={startIndex === 0}
-                sx={{ mb: 2 }}
-              >
-                <KeyboardArrowUpIcon fontSize="large" />
-              </IconButton>
-
-              {/* Desktop: Slide with ±10% offset; Mobile: no animation */}
-              {!isMobile ? (
-                <Slide
-                  key={startIndex}
-                  in
-                  direction={scrollDirection === 'down' ? 'down' : 'up'}
-                  timeout={300}
-                  mountOnEnter
-                  unmountOnExit
-                  onEnter={(node) => {
-                    const offset = '10%';
-                    node.style.transform =
-                      scrollDirection === 'down'
-                        ? `translateY(-${offset})`
-                        : `translateY(${offset})`;
-                  }}
-                  onEntering={(node) => {
-                    node.style.transform = 'translateY(0%)';
-                  }}
+              <Box display="flex" flexDirection="column" alignItems="center">
+                {/* Up Arrow */}
+                <IconButton
+                  onClick={handlePrevAppointment}
+                  disabled={startIndex === 0}
+                  sx={{ mb: 2 }}
                 >
-                  <Box sx={{ maxWidth: 400 }}>
+                  <KeyboardArrowUpIcon fontSize="large" />
+                </IconButton>
+
+                {/* Desktop: Slide with ±10% offset; Mobile: no animation */}
+                {!isMobile ? (
+                  <Slide
+                    key={startIndex}
+                    in
+                    direction={scrollDirection === 'down' ? 'down' : 'up'}
+                    timeout={300}
+                    mountOnEnter
+                    unmountOnExit
+                    onEnter={(node) => {
+                      const offset = '10%';
+                      node.style.transform =
+                        scrollDirection === 'down'
+                          ? `translateY(-${offset})`
+                          : `translateY(${offset})`;
+                    }}
+                    onEntering={(node) => {
+                      node.style.transform = 'translateY(0%)';
+                    }}
+                  >
+                    <Box sx={{ maxWidth: 400 }}>
+                      {appointmentsToShow.length > 0 ? (
+                        appointmentsToShow.map((appt, index) => {
+                          // Parse the date
+                          const parsedDate = appt.date ? new Date(appt.date) : null;
+                          const formattedDate = parsedDate
+                            ? parsedDate.toLocaleDateString(undefined, {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                              })
+                            : 'N/A';
+
+                          // Format homework percentage
+                          const percentage = `${appt.percentage ?? 0}%`;
+
+                          // Helper to convert decimal hours to Hours/Minutes
+                          const formatDuration = (decimalHours) => {
+                            if (!decimalHours || isNaN(decimalHours)) return 'N/A';
+                            const totalMinutes = Math.round(decimalHours * 60);
+                            const h = Math.floor(totalMinutes / 60);
+                            const m = totalMinutes % 60;
+
+                            if (h === 0 && m > 0) {
+                              return `${m} Minute${m === 1 ? '' : 's'}`;
+                            } else if (h > 0 && m === 0) {
+                              return `${h} Hour${h === 1 ? '' : 's'}`;
+                            } else if (h > 0 && m > 0) {
+                              return `${h} Hour${h === 1 ? '' : 's'} and ${m} Minute${m === 1 ? '' : 's'}`;
+                            } else {
+                              return 'N/A';
+                            }
+                          };
+
+                          const displayDuration = formatDuration(Number(appt.duration));
+
+                          // Use attendance from the backend directly
+                          const status = appt.attendance || 'N/A';
+
+                          return (
+                            <AppointmentCard key={index}>
+                              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                Appointment Date: {formattedDate}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                Homework Completed: {percentage}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                Duration: {displayDuration}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#333' }}>
+                                Status: {status}
+                              </Typography>
+                            </AppointmentCard>
+                          );
+                        })
+                      ) : (
+                        <Typography variant="body2" color="textSecondary">
+                          No recent appointments available.
+                        </Typography>
+                      )}
+                    </Box>
+                  </Slide>
+                ) : (
+                  // Mobile: No animation
+                  <Box sx={{ maxWidth: '100%' }}>
                     {appointmentsToShow.length > 0 ? (
                       appointmentsToShow.map((appt, index) => {
+                        // Parse the date
                         const parsedDate = appt.date ? new Date(appt.date) : null;
                         const formattedDate = parsedDate
                           ? parsedDate.toLocaleDateString(undefined, {
@@ -851,10 +944,31 @@ const ParentDashboard = () => {
                             })
                           : 'N/A';
 
-                        // Populate fields from 'appt'
+                        // Format homework percentage
                         const percentage = `${appt.percentage ?? 0}%`;
-                        const duration = appt.duration ?? 'N/A';
-                        const status = appt.attendance ? 'Attended' : 'Missed';
+
+                        // Helper to convert decimal hours to Hours/Minutes
+                        const formatDuration = (decimalHours) => {
+                          if (!decimalHours || isNaN(decimalHours)) return 'N/A';
+                          const totalMinutes = Math.round(decimalHours * 60);
+                          const h = Math.floor(totalMinutes / 60);
+                          const m = totalMinutes % 60;
+
+                          if (h === 0 && m > 0) {
+                            return `${m} Minute${m === 1 ? '' : 's'}`;
+                          } else if (h > 0 && m === 0) {
+                            return `${h} Hour${h === 1 ? '' : 's'}`;
+                          } else if (h > 0 && m > 0) {
+                            return `${h} Hour${h === 1 ? '' : 's'} and ${m} Minute${m === 1 ? '' : 's'}`;
+                          } else {
+                            return 'N/A';
+                          }
+                        };
+
+                        const displayDuration = formatDuration(Number(appt.duration));
+
+                        // Use attendance from the backend directly
+                        const status = appt.attendance || 'N/A';
 
                         return (
                           <AppointmentCard key={index}>
@@ -865,7 +979,7 @@ const ParentDashboard = () => {
                               Homework Completed: {percentage}
                             </Typography>
                             <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
-                              Duration: {duration}
+                              Duration: {displayDuration}
                             </Typography>
                             <Typography variant="body2" sx={{ color: '#333' }}>
                               Status: {status}
@@ -879,62 +993,20 @@ const ParentDashboard = () => {
                       </Typography>
                     )}
                   </Box>
-                </Slide>
-              ) : (
-                // Mobile: No animation
-                <Box sx={{ maxWidth: '100%' }}>
-                  {appointmentsToShow.length > 0 ? (
-                    appointmentsToShow.map((appt, index) => {
-                      const parsedDate = appt.date ? new Date(appt.date) : null;
-                      const formattedDate = parsedDate
-                        ? parsedDate.toLocaleDateString(undefined, {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                          })
-                        : 'N/A';
+                )}
 
-                      // Populate fields from 'appt'
-                      const percentage = `${appt.percentage ?? 0}%`;
-                      const duration = appt.duration ?? 'N/A';
-                      const status = appt.attendance ? 'Attended' : 'Missed';
+                {/* Down Arrow */}
+                <IconButton
+                  onClick={() => handleNextAppointment(sortedAppointments.length)}
+                  disabled={startIndex + 3 >= sortedAppointments.length}
+                  sx={{ mt: 2 }}
+                >
+                  <KeyboardArrowDownIcon fontSize="large" />
+                </IconButton>
+              </Box>
+            </SectionContainer>
+          </TabPanel>
 
-                      return (
-                        <AppointmentCard key={index}>
-                          <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                            Appointment Date: {formattedDate}
-                          </Typography>
-                          <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
-                            Homework Completed: {percentage}
-                          </Typography>
-                          <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
-                            Duration: {duration}
-                          </Typography>
-                          <Typography variant="body2" sx={{ color: '#333' }}>
-                            Status: {status}
-                          </Typography>
-                        </AppointmentCard>
-                      );
-                    })
-                  ) : (
-                    <Typography variant="body2" color="textSecondary">
-                      No recent appointments available.
-                    </Typography>
-                  )}
-                </Box>
-              )}
-
-              {/* Down Arrow */}
-              <IconButton
-                onClick={() => handleNextAppointment(sortedAppointments.length)}
-                disabled={startIndex + 3 >= sortedAppointments.length}
-                sx={{ mt: 2 }}
-              >
-                <KeyboardArrowDownIcon fontSize="large" />
-              </IconButton>
-            </Box>
-          </SectionContainer>
-        </TabPanel>
 
 
          {/* ============== School Goals ============== */}
@@ -1080,8 +1152,8 @@ const ParentDashboard = () => {
             {/* Right side: Test Scores (or top on mobile) */}
             <Grid item xs={12} md={10} order={{ xs: 1, md: 2 }}>
               <SectionContainer>
-                <SectionTitle variant="h6">Test Scores</SectionTitle>
-                <Divider sx={{ marginBottom: '16px' }} />
+                {/* <SectionTitle variant="h6">Test Scores</SectionTitle>
+                <Divider sx={{ marginBottom: '16px' }} /> */}
 
                 {/* ================== SAT Scores ================== */}
                 <Typography variant="h6" sx={{ fontWeight: 600, marginTop: '16px' }}>

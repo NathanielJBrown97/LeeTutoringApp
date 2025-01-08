@@ -59,7 +59,7 @@ func (app *App) UpdateTestDataHandler(w http.ResponseWriter, r *http.Request) {
 		"test":       testData.Test,
 		"type":       testData.Quality,
 		"baseline":   testData.Baseline,
-		"updated_at": time.Now().In(loc).Format(time.RFC3339),
+		"updated_at": time.Now().Format(time.RFC3339),
 	}
 
 	// Prepare scores subdocuments
