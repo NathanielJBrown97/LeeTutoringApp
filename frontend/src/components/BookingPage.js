@@ -23,6 +23,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import Link from '@mui/material/Link';
 import { styled } from '@mui/system';
 import { tutorBookingLinks } from '../config/TutorBookingLinks';
 
@@ -74,6 +75,17 @@ const SectionTitle = styled(Typography)(() => ({
   fontWeight: '600',
   color: brandBlue,
 }));
+
+// Map tutor names to subject descriptions:
+const tutorSubjects = {
+  edward: 'Math, Science, and Study Skills Tutor',
+  eli: 'Reading, English/Grammar, and Science Tutor',
+  ben: 'Reading, English/Grammar, and Science Tutor',
+  patrick: 'Reading, English/Grammar, and Science Tutor',
+  kyra: 'Math and Science Tutor',
+  kieran: 'Math and Science Tutor',
+  omar: 'High School / College Biology and Chemistry Tutor',
+};
 
 const tutorImages = {
   ben,
@@ -184,8 +196,6 @@ const BookingPage = () => {
           studentID,
           personal: studentData.personal || {},
           business: studentData.business || {},
-          // Include homeworkCompletion here so we can look for tutor-specific feedback
-          homeworkCompletion: studentData.homeworkCompletion || [],
         }))
     );
 
@@ -246,8 +256,11 @@ const BookingPage = () => {
     (student) => student.studentID === selectedStudentID
   );
   const tutors = selectedStudent?.business.associated_tutors || [];
-  // We'll need the full homeworkCompletion array to find feedback for each tutor
-  const allCompletions = selectedStudent?.homeworkCompletion || [];
+
+  // Example hour calculations (replace with your actual logic/data)
+  const totalHoursPurchased = selectedStudent?.business.totalHoursPurchased || 0;
+  const totalHoursUsed = selectedStudent?.business.totalHoursUsed || 0;
+  const totalHoursRemaining = totalHoursPurchased - totalHoursUsed;
 
   return (
     <Box sx={{ backgroundColor: lightBackground, minHeight: '100vh' }}>
@@ -417,13 +430,13 @@ const BookingPage = () => {
               variant={isMobile ? 'body1' : 'h6'}
               sx={{ opacity: 0.9 }}
             >
-              View feedback directly from the tutors, and book your student's next appointment.
+              Book your student's next appointment below.
             </Typography>
           </Box>
         </HeroSection>
       </Container>
 
-      {/* ---------- Feedback & Booking Section ---------- */}
+      {/* ---------- Tutors & Hours Section ---------- */}
       <Container maxWidth="xl">
         <InfoSection>
           <Box
@@ -432,10 +445,11 @@ const BookingPage = () => {
             alignItems="center"
             sx={{ marginBottom: '16px' }}
           >
+            {/* Updated Title: "so-and-so's Tutors:" */}
             <SectionTitle variant="h5" sx={{ m: 0 }}>
               {selectedStudent?.personal.name
-                ? `Feedback From ${selectedStudent.personal.name}'s Tutors:`
-                : 'Feedback From Tutors:'}
+                ? `${selectedStudent.personal.name}'s Tutors:`
+                : 'Student’s Tutors:'}
             </SectionTitle>
 
             <Button
@@ -457,85 +471,124 @@ const BookingPage = () => {
 
           <Divider sx={{ marginBottom: '24px' }} />
 
-          {tutors.length > 0 ? (
-            <Grid container spacing={4}>
-              {tutors.map((tutor, index) => {
-                const tutorInfo = tutorBookingLinks[tutor] || {};
-                const tutorKey = tutor.toLowerCase();
-                const tutorImage =
-                  tutorImages[tutorKey] ||
-                  'https://via.placeholder.com/300x200?text=Tutor+Image';
+          {/*
+            We set order={{ xs: 1, md: 2 }} on the hours breakdown so it appears FIRST on mobile,
+            and order={{ xs: 2, md: 1 }} on the tutors so it appears SECOND on mobile.
+            On desktop (md), they switch to their original positions.
+          */}
+          <Grid container spacing={4} alignItems="stretch">
+            {/* ---------- Right Column: Hours Breakdown (FIRST on mobile) ---------- */}
+            <Grid
+              item
+              xs={12}
+              md={6}
+              order={{ xs: 1, md: 2 }}
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <Box
+                sx={{
+                  border: `1px solid #ddd`,
+                  borderRadius: '8px',
+                  p: 3,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  height: '100%',
+                }}
+              >
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                    Hours Breakdown
+                  </Typography>
+                  <Typography variant="body1" sx={{ mb: 1 }}>
+                    <strong>Total Hours Purchased:</strong> {totalHoursPurchased}
+                  </Typography>
+                  <Typography variant="body1" sx={{ mb: 1 }}>
+                    <strong>Total Hours Used:</strong> {totalHoursUsed}
+                  </Typography>
+                  <Typography variant="body1">
+                    <strong>Total Hours Remaining:</strong> {totalHoursRemaining}
+                  </Typography>
+                </Box>
 
-                // Find the most recent homeworkCompletion document for this tutor
-                const recentTutorCompletion = [...allCompletions]
-                  .filter(
-                    (hw) =>
-                      hw.tutor &&
-                      hw.tutor.toLowerCase() === tutor.toLowerCase()
-                  )
-                  .sort(
-                    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-                  )[0];
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
+                  Please contact{' '}
+                  <Link href="mailto:admin@leetutoring.com" underline="hover">
+                    admin@leetutoring.com
+                  </Link>{' '}
+                  to purchase more hours if needed.
+                </Typography>
+                </Box>
+              </Box>
+            </Grid>
 
-                // Extract feedback and date if found
-                const feedbackText =
-                  recentTutorCompletion?.feedback || 'No recent feedback available.';
-                const feedbackDate =
-                  recentTutorCompletion?.date || 'N/A';
+            {/* ---------- Left Column: Tutor Cards (SECOND on mobile) ---------- */}
+            <Grid
+              item
+              xs={12}
+              md={6}
+              order={{ xs: 2, md: 1 }}
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              {tutors.length > 0 ? (
+                tutors.map((tutor, index) => {
+                  const tutorKey = tutor.toLowerCase();
+                  const tutorImage =
+                    tutorImages[tutorKey] ||
+                    'https://via.placeholder.com/300x200?text=Tutor+Image';
+                  const tutorInfo = tutorBookingLinks[tutor] || {};
+                  const subjectDescription = tutorSubjects[tutorKey] || 'Tutor';
 
-                return (
-                  <Grid item xs={12} key={index}>
-                    <TutorCard>
-                      <CardContent>
-                        <Grid container spacing={2} alignItems="stretch">
-                          {/* Tutor Image */}
-                          <Grid item xs={12} md={3}>
-                            <Box
-                              sx={{
-                                width: '100%',
-                                height: '100%',
-                                borderRadius: '8px',
-                                overflow: 'hidden',
-                              }}
-                            >
+                  return (
+                    <Box key={index} mb={3}>
+                      <TutorCard>
+                        <CardContent>
+                          <Grid container spacing={2} alignItems="stretch">
+                            {/* Tutor Image */}
+                            <Grid item xs={12} sm={4}>
                               <Box
-                                component="img"
-                                src={tutorImage}
-                                alt={tutor}
                                 sx={{
                                   width: '100%',
                                   height: '100%',
-                                  objectFit: 'cover',
-                                  objectPosition: 'center',
+                                  borderRadius: '8px',
+                                  overflow: 'hidden',
                                 }}
-                              />
-                            </Box>
-                          </Grid>
+                              >
+                                <Box
+                                  component="img"
+                                  src={tutorImage}
+                                  alt={tutor}
+                                  sx={{
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'cover',
+                                    objectPosition: 'center',
+                                  }}
+                                />
+                              </Box>
+                            </Grid>
 
-                          {/* Feedback + Booking */}
-                          <Grid
-                            item
-                            xs={12}
-                            md={9}
-                            display="flex"
-                            flexDirection="column"
-                          >
-                            <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                              An Update From {tutor}:
-                            </Typography>
-
-                            <Typography variant="body1" sx={{ flexGrow: 1 }}>
-                              {feedbackText}
-                            </Typography>
-
-                            <Box
+                            {/* Tutor Info */}
+                            <Grid
+                              item
+                              xs={12}
+                              sm={8}
                               display="flex"
-                              justifyContent="space-between"
-                              alignItems="center"
-                              sx={{ marginTop: '16px' }}
+                              flexDirection="column"
                             >
-                              <Typography variant="body2" color="textSecondary">
-                                {`Feedback Date: ${feedbackDate}`}
+                              <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+                                {tutor}
+                              </Typography>
+
+                              <Typography variant="body1" sx={{ mb: 2 }}>
+                                {subjectDescription}
                               </Typography>
 
                               {tutorInfo.individualLink ? (
@@ -545,6 +598,7 @@ const BookingPage = () => {
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   sx={{
+                                    alignSelf: 'flex-start',
                                     textTransform: 'none',
                                     fontWeight: 'bold',
                                     backgroundColor: brandBlue,
@@ -561,20 +615,20 @@ const BookingPage = () => {
                                   No booking link available.
                                 </Typography>
                               )}
-                            </Box>
+                            </Grid>
                           </Grid>
-                        </Grid>
-                      </CardContent>
-                    </TutorCard>
-                  </Grid>
-                );
-              })}
+                        </CardContent>
+                      </TutorCard>
+                    </Box>
+                  );
+                })
+              ) : (
+                <Typography variant="body1" color="textSecondary">
+                  No tutors available.
+                </Typography>
+              )}
             </Grid>
-          ) : (
-            <Typography variant="body1" color="textSecondary">
-              No tutors available.
-            </Typography>
-          )}
+          </Grid>
         </InfoSection>
       </Container>
     </Box>

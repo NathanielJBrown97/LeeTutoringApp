@@ -2,6 +2,13 @@ import React, { useEffect, useState, useContext } from 'react';
 import { API_BASE_URL } from '../config';
 import { AuthContext } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import ben from '../assets/ben.jpg';
+import edward from '../assets/edward.jpg';
+import kieran from '../assets/kieran.jpg';
+import kyra from '../assets/kyra.jpg';
+import omar from '../assets/omar.jpg';
+import patrick from '../assets/patrick.jpg';
+import eli from '../assets/eli.jpg';
 
 // --- Recharts ---
 import {
@@ -62,6 +69,16 @@ const lightBackground = '#fafafa';
 const brandGoldLight = '#d4a100';
 const brandGoldLighter = '#f5dd5c';
 const brandBlueLight = '#2a2f45';
+
+const tutorImages = {
+  ben,
+  edward,
+  kieran,
+  kyra,
+  omar,
+  patrick,
+  eli,
+};
 
 // The tab labels in an array (for desktop tabs or mobile dropdown).
 const tabLabels = [
@@ -191,7 +208,7 @@ function renderChangeChip(oldVal, newVal) {
   const signDiff = diff > 0 ? `+${diff}` : diff.toString(); // e.g. +2 or -2
 
   // Choose a color: positive => brandBlue; negative => brandGold.
-  const chipBgColor = diff >= 0 ? brandBlue : brandGold;
+  const chipBgColor = diff >= 0 ? '#18a558' : brandGold;
   // White text so it's visible on the colored background.
   const combinedLabel = `${arrowSymbol} ${signDiff}`;
 
@@ -836,182 +853,235 @@ const ParentDashboard = () => {
           {/* =================== TAB PANELS =================== */}
 
           <TabPanel value={activeTab} index={0}>
-            <SectionContainer>
-              <SectionTitle variant="h6">Recent Appointments</SectionTitle>
-              <Divider sx={{ marginBottom: '16px' }} />
+  <SectionContainer>
+    <SectionTitle variant="h6">Recent Appointments</SectionTitle>
+    <Divider sx={{ marginBottom: '16px' }} />
 
-              <Box display="flex" flexDirection="column" alignItems="center">
-                {/* Up Arrow */}
-                <IconButton
-                  onClick={handlePrevAppointment}
-                  disabled={startIndex === 0}
-                  sx={{ mb: 2 }}
-                >
-                  <KeyboardArrowUpIcon fontSize="large" />
-                </IconButton>
+    <Box display="flex" flexDirection="column" alignItems="center">
+      {/* Up Arrow */}
+      <IconButton
+        onClick={handlePrevAppointment}
+        disabled={startIndex === 0}
+        sx={{ mb: 2 }}
+      >
+        <KeyboardArrowUpIcon fontSize="large" />
+      </IconButton>
 
-                {/* Desktop: Slide with ±10% offset; Mobile: no animation */}
-                {!isMobile ? (
-                  <Slide
-                    key={startIndex}
-                    in
-                    direction={scrollDirection === 'down' ? 'down' : 'up'}
-                    timeout={300}
-                    mountOnEnter
-                    unmountOnExit
-                    onEnter={(node) => {
-                      const offset = '10%';
-                      node.style.transform =
-                        scrollDirection === 'down'
-                          ? `translateY(-${offset})`
-                          : `translateY(${offset})`;
-                    }}
-                    onEntering={(node) => {
-                      node.style.transform = 'translateY(0%)';
+      {/* Desktop: Slide with ±10% offset; Mobile: no animation */}
+      {!isMobile ? (
+        <Slide
+          key={startIndex}
+          in
+          direction={scrollDirection === 'down' ? 'down' : 'up'}
+          timeout={300}
+          mountOnEnter
+          unmountOnExit
+          onEnter={(node) => {
+            const offset = '10%';
+            node.style.transform =
+              scrollDirection === 'down'
+                ? `translateY(-${offset})`
+                : `translateY(${offset})`;
+          }}
+          onEntering={(node) => {
+            node.style.transform = 'translateY(0%)';
+          }}
+        >
+          <Box sx={{ maxWidth: 400 }}>
+            {appointmentsToShow.length > 0 ? (
+              appointmentsToShow.map((appt, index) => {
+                // 1) Format the date
+                const parsedDate = appt.date ? new Date(appt.date) : null;
+                const formattedDate = parsedDate
+                  ? parsedDate.toLocaleDateString(undefined, {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })
+                  : 'N/A';
+
+                // 2) Homework percentage
+                const percentage = `${appt.percentage ?? 0}%`;
+
+                // 3) Convert decimal hours to readable format
+                const formatDuration = (decimalHours) => {
+                  if (!decimalHours || isNaN(decimalHours)) return 'N/A';
+                  const totalMinutes = Math.round(decimalHours * 60);
+                  const h = Math.floor(totalMinutes / 60);
+                  const m = totalMinutes % 60;
+
+                  if (h === 0 && m > 0) {
+                    return `${m} Minute${m === 1 ? '' : 's'}`;
+                  } else if (h > 0 && m === 0) {
+                    return `${h} Hour${h === 1 ? '' : 's'}`;
+                  } else if (h > 0 && m > 0) {
+                    return `${h} Hour${h === 1 ? '' : 's'} and ${m} Minute${
+                      m === 1 ? '' : 's'
+                    }`;
+                  }
+                  return 'N/A';
+                };
+                const displayDuration = formatDuration(Number(appt.duration));
+
+                // 4) Attendance status
+                const status = appt.attendance || 'N/A';
+
+                // 5) Tutor name -> dynamic image
+                const tutorName = (appt.tutor || '').toLowerCase();
+                const tutorImage =
+                  tutorImages[tutorName] ||
+                  'https://via.placeholder.com/48?text=Tutor';
+
+                return (
+                  <AppointmentCard key={index} sx={{ position: 'relative' }}>
+                    <Typography
+                      variant="subtitle1"
+                      sx={{ fontWeight: 'bold', mb: 1 }}
+                    >
+                      Appointment Date: {formattedDate}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                      Homework Completed: {percentage}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                      Duration: {displayDuration}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: '#333' }}>
+                      Status: {status}
+                    </Typography>
+
+                    {/* Bottom-right Tutor Image & Name */}
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        // Decrease this to make the avatar appear lower
+                        bottom: 8, 
+                        right: 16,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Avatar
+                        src={tutorImage}
+                        alt={appt.tutor || 'Tutor'}
+                        sx={{ width: 48, height: 48, mb: 1 }}
+                      />
+                      <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+                        {appt.tutor || 'Tutor'}
+                      </Typography>
+                    </Box>
+                  </AppointmentCard>
+                );
+              })
+            ) : (
+              <Typography variant="body2" color="textSecondary">
+                No recent appointments available.
+              </Typography>
+            )}
+          </Box>
+        </Slide>
+      ) : (
+        // ---------- Mobile: No slide animation ----------
+        <Box sx={{ maxWidth: '100%' }}>
+          {appointmentsToShow.length > 0 ? (
+            appointmentsToShow.map((appt, index) => {
+              const parsedDate = appt.date ? new Date(appt.date) : null;
+              const formattedDate = parsedDate
+                ? parsedDate.toLocaleDateString(undefined, {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })
+                : 'N/A';
+
+              const percentage = `${appt.percentage ?? 0}%`;
+              const formatDuration = (decimalHours) => {
+                if (!decimalHours || isNaN(decimalHours)) return 'N/A';
+                const totalMinutes = Math.round(decimalHours * 60);
+                const h = Math.floor(totalMinutes / 60);
+                const m = totalMinutes % 60;
+
+                if (h === 0 && m > 0) {
+                  return `${m} Minute${m === 1 ? '' : 's'}`;
+                } else if (h > 0 && m === 0) {
+                  return `${h} Hour${h === 1 ? '' : 's'}`;
+                } else if (h > 0 && m > 0) {
+                  return `${h} Hour${h === 1 ? '' : 's'} and ${m} Minute${
+                    m === 1 ? '' : 's'
+                  }`;
+                }
+                return 'N/A';
+              };
+              const displayDuration = formatDuration(Number(appt.duration));
+              const status = appt.attendance || 'N/A';
+
+              const tutorName = (appt.tutor || '').toLowerCase();
+              const tutorImage =
+                tutorImages[tutorName] ||
+                'https://via.placeholder.com/48?text=Tutor';
+
+              return (
+                <AppointmentCard key={index} sx={{ position: 'relative' }}>
+                  <Typography
+                    variant="subtitle1"
+                    sx={{ fontWeight: 'bold', mb: 1 }}
+                  >
+                    Appointment Date: {formattedDate}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                    Homework Completed: {percentage}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                    Duration: {displayDuration}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#333' }}>
+                    Status: {status}
+                  </Typography>
+
+                  {/* Bottom-right Tutor Image & Name */}
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      bottom: 8, // Lower offset => visually lower in the card
+                      right: 16,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
                     }}
                   >
-                    <Box sx={{ maxWidth: 400 }}>
-                      {appointmentsToShow.length > 0 ? (
-                        appointmentsToShow.map((appt, index) => {
-                          // Parse the date
-                          const parsedDate = appt.date ? new Date(appt.date) : null;
-                          const formattedDate = parsedDate
-                            ? parsedDate.toLocaleDateString(undefined, {
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric',
-                              })
-                            : 'N/A';
-
-                          // Format homework percentage
-                          const percentage = `${appt.percentage ?? 0}%`;
-
-                          // Helper to convert decimal hours to Hours/Minutes
-                          const formatDuration = (decimalHours) => {
-                            if (!decimalHours || isNaN(decimalHours)) return 'N/A';
-                            const totalMinutes = Math.round(decimalHours * 60);
-                            const h = Math.floor(totalMinutes / 60);
-                            const m = totalMinutes % 60;
-
-                            if (h === 0 && m > 0) {
-                              return `${m} Minute${m === 1 ? '' : 's'}`;
-                            } else if (h > 0 && m === 0) {
-                              return `${h} Hour${h === 1 ? '' : 's'}`;
-                            } else if (h > 0 && m > 0) {
-                              return `${h} Hour${h === 1 ? '' : 's'} and ${m} Minute${
-                                m === 1 ? '' : 's'
-                              }`;
-                            } else {
-                              return 'N/A';
-                            }
-                          };
-
-                          const displayDuration = formatDuration(Number(appt.duration));
-
-                          // Use attendance from the backend directly
-                          const status = appt.attendance || 'N/A';
-
-                          return (
-                            <AppointmentCard key={index}>
-                              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                                Appointment Date: {formattedDate}
-                              </Typography>
-                              <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
-                                Homework Completed: {percentage}
-                              </Typography>
-                              <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
-                                Duration: {displayDuration}
-                              </Typography>
-                              <Typography variant="body2" sx={{ color: '#333' }}>
-                                Status: {status}
-                              </Typography>
-                            </AppointmentCard>
-                          );
-                        })
-                      ) : (
-                        <Typography variant="body2" color="textSecondary">
-                          No recent appointments available.
-                        </Typography>
-                      )}
-                    </Box>
-                  </Slide>
-                ) : (
-                  // Mobile: No animation
-                  <Box sx={{ maxWidth: '100%' }}>
-                    {appointmentsToShow.length > 0 ? (
-                      appointmentsToShow.map((appt, index) => {
-                        // Parse the date
-                        const parsedDate = appt.date ? new Date(appt.date) : null;
-                        const formattedDate = parsedDate
-                          ? parsedDate.toLocaleDateString(undefined, {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric',
-                            })
-                          : 'N/A';
-
-                        // Format homework percentage
-                        const percentage = `${appt.percentage ?? 0}%`;
-
-                        // Helper to convert decimal hours to Hours/Minutes
-                        const formatDuration = (decimalHours) => {
-                          if (!decimalHours || isNaN(decimalHours)) return 'N/A';
-                          const totalMinutes = Math.round(decimalHours * 60);
-                          const h = Math.floor(totalMinutes / 60);
-                          const m = totalMinutes % 60;
-
-                          if (h === 0 && m > 0) {
-                            return `${m} Minute${m === 1 ? '' : 's'}`;
-                          } else if (h > 0 && m === 0) {
-                            return `${h} Hour${h === 1 ? '' : 's'}`;
-                          } else if (h > 0 && m > 0) {
-                            return `${h} Hour${h === 1 ? '' : 's'} and ${m} Minute${
-                              m === 1 ? '' : 's'
-                            }`;
-                          } else {
-                            return 'N/A';
-                          }
-                        };
-
-                        const displayDuration = formatDuration(Number(appt.duration));
-                        const status = appt.attendance || 'N/A';
-
-                        return (
-                          <AppointmentCard key={index}>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                              Appointment Date: {formattedDate}
-                            </Typography>
-                            <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
-                              Homework Completed: {percentage}
-                            </Typography>
-                            <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
-                              Duration: {displayDuration}
-                            </Typography>
-                            <Typography variant="body2" sx={{ color: '#333' }}>
-                              Status: {status}
-                            </Typography>
-                          </AppointmentCard>
-                        );
-                      })
-                    ) : (
-                      <Typography variant="body2" color="textSecondary">
-                        No recent appointments available.
-                      </Typography>
-                    )}
+                    <Avatar
+                      src={tutorImage}
+                      alt={appt.tutor || 'Tutor'}
+                      sx={{ width: 48, height: 48, mb: 1 }}
+                    />
+                    <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+                      {appt.tutor || 'Tutor'}
+                    </Typography>
                   </Box>
-                )}
+                </AppointmentCard>
+              );
+            })
+          ) : (
+            <Typography variant="body2" color="textSecondary">
+              No recent appointments available.
+            </Typography>
+          )}
+        </Box>
+      )}
 
-                {/* Down Arrow */}
-                <IconButton
-                  onClick={() => handleNextAppointment(sortedAppointments.length)}
-                  disabled={startIndex + 3 >= sortedAppointments.length}
-                  sx={{ mt: 2 }}
-                >
-                  <KeyboardArrowDownIcon fontSize="large" />
-                </IconButton>
-              </Box>
-            </SectionContainer>
-          </TabPanel>
+      {/* Down Arrow */}
+      <IconButton
+        onClick={() => handleNextAppointment(sortedAppointments.length)}
+        disabled={startIndex + 3 >= sortedAppointments.length}
+        sx={{ mt: 2 }}
+      >
+        <KeyboardArrowDownIcon fontSize="large" />
+      </IconButton>
+    </Box>
+  </SectionContainer>
+</TabPanel>
+
 
           {/* ============== School Goals ============== */}
           <TabPanel value={activeTab} index={1}>
