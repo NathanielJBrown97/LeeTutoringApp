@@ -26,6 +26,7 @@ import (
 	"golang.org/x/oauth2/google"
 
 	"cloud.google.com/go/firestore"
+	intuitoauth "github.com/NathanielJBrown97/LeeTutoringApp/internal/intuit"
 )
 
 func main() {
@@ -128,6 +129,12 @@ func main() {
 		OAuthConfig:     appleConf,
 		FirestoreClient: firestoreClient,
 		SecretKey:       secretKey,
+	}
+
+	// Initialize Intuit OAuth Services
+	intuitOAuthSvc, err := intuitoauth.NewOAuthService(context.Background(), firestoreClient)
+	if err != nil {
+		log.Fatalf("Failed to init Intuit OAuth Service: %v", err)
 	}
 
 	// Initialize parent App
@@ -256,6 +263,30 @@ func main() {
 	// Apple OAuth handlers
 	r.HandleFunc("/internal/appleauth/oauth", appleApp.OAuthHandler).Methods("GET")
 	r.HandleFunc("/internal/appleauth/callback", appleApp.OAuthCallbackHandler).Methods("POST")
+
+	// Intuit OAuth handlers
+	r.HandleFunc("/internal/intuit/oauth", func(w http.ResponseWriter, r *http.Request) {
+		// Usually a GET request to start OAuth
+		intuitOAuthSvc.HandleAuthRedirect(w, r)
+	}).Methods("GET")
+
+	r.HandleFunc("/internal/intuit/callback", func(w http.ResponseWriter, r *http.Request) {
+		// Callback from Intuit
+		intuitOAuthSvc.HandleCallback(w, r)
+	}).Methods("GET")
+
+	// intuit webhook for keeping invoices up to date
+	r.HandleFunc("/internal/intuit/webhook", intuitOAuthSvc.HandleWebhook).Methods("POST")
+
+	// test to ensure token is being found -- uncomment for futuer testing.
+	// r.HandleFunc("/internal/intuit/testtoken", func(w http.ResponseWriter, r *http.Request) {
+	// 	tok, err := intuitOAuthSvc.Token(r.Context())
+	// 	if err != nil {
+	// 		http.Error(w, "Failed to get token: "+err.Error(), http.StatusInternalServerError)
+	// 		return
+	// 	}
+	// 	w.Write([]byte("Current Access Token: " + tok.AccessToken))
+	// }).Methods("GET")
 
 	// Firestore Updater Routes with CORS and OPTIONS handling
 
