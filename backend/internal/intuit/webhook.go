@@ -14,8 +14,6 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// A sample JSON structure for the QuickBooks Webhook payload
-// Reference: https://developer.intuit.com/app/developer/qbo/docs/develop/webhooks
 type WebhookEvent struct {
 	EventNotifications []struct {
 		RealmID         string `json:"realmId"`
@@ -30,6 +28,552 @@ type WebhookEvent struct {
 	} `json:"eventNotifications"`
 }
 
+func (s *OAuthService) HandleWebhook(w http.ResponseWriter, r *http.Request) {
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read body", http.StatusInternalServerError)
+		return
+	}
+	defer r.Body.Close()
+
+	var webhook WebhookEvent
+	var lastCustomerRef string
+	if err := json.Unmarshal(bodyBytes, &webhook); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, note := range webhook.EventNotifications {
+		realmID := note.RealmID
+
+		for _, entity := range note.DataChangeEvent.Entities {
+
+			log.Printf("[Webhook Debug] entity.Name=%s, entity.ID=%s, entity.Operation=%s",
+				entity.Name, entity.ID, entity.Operation)
+			// handle invoices
+			if strings.EqualFold(entity.Name, "Invoice") {
+				invoiceID := entity.ID
+				operation := entity.Operation
+
+				if isDeleteOperation(operation) {
+					cRef, err := s.deleteInvoiceDoc(r.Context(), invoiceID)
+					if err != nil {
+						log.Printf("Failed to delete invoice doc %s: %v\n", invoiceID, err)
+					} else {
+						log.Printf("Webhook: successfully handled delete event for invoice %s\n", invoiceID)
+						if cRef != "" {
+							lastCustomerRef = cRef
+						}
+					}
+					continue
+				}
+
+				// otherwise handle create/update/void
+				invData, err := s.fetchInvoiceFromQBO(r.Context(), realmID, invoiceID)
+				if err != nil {
+					log.Printf("Failed to fetch invoice %s from realm %s: %v\n", invoiceID, realmID, err)
+					continue
+				}
+				lastCustomerRef = invData.CustomerRef
+				// Store it in Firestore: intuit/<customerRef>/invoices/<invoiceID>
+				err = s.storeInvoice(r.Context(), invData)
+				if err != nil {
+					log.Printf("Failed to store invoice in Firestore: %v\n", err)
+				} else {
+					log.Printf("Webhook: successfully handled %s event for invoice %s\n", operation, invoiceID)
+				}
+			}
+
+			// handle payments
+			if strings.EqualFold(entity.Name, "Payment") {
+				paymentID := entity.ID
+				operation := entity.Operation
+
+				if isDeleteOperation(operation) {
+					err := s.deletePaymentDoc(r.Context(), paymentID)
+					if err != nil {
+						log.Printf("Failed to delete payment doc %s: %v", paymentID, err)
+					} else {
+						log.Printf("Deleted payment doc for PaymentID=%s", paymentID)
+					}
+					continue
+				}
+
+				payData, err := s.fetchPaymentFromQBO(r.Context(), realmID, paymentID)
+				if err != nil {
+					log.Printf("Failed to fetch payment %s: %v", paymentID, err)
+					continue
+				}
+
+				if len(payData.Lines) > 0 && payData.Lines[0].InvoiceID != "" {
+					invSnap, _ := s.findInvoiceDocByID(r.Context(), payData.Lines[0].InvoiceID)
+					if invSnap != nil {
+						var inv InvoiceRecord
+						if e := invSnap.DataTo(&inv); e == nil {
+							lastCustomerRef = inv.CustomerRef
+						}
+					}
+				}
+
+				if err := s.storePayment(r.Context(), payData); err != nil {
+					log.Printf("Failed to store payment doc: %v", err)
+				} else {
+					log.Printf("Stored payment doc for PaymentID=%s", paymentID)
+				}
+			}
+
+			// handle credit payments
+			if strings.EqualFold(entity.Name, "CreditMemo") {
+				creditMemoID := entity.ID
+				operation := entity.Operation
+
+				if isDeleteOperation(operation) {
+					err := s.deleteCreditMemoDoc(r.Context(), creditMemoID)
+					if err != nil {
+						log.Printf("Failed to delete credit memo doc %s: %v", creditMemoID, err)
+					} else {
+						log.Printf("Deleted credit memo doc for creditMemoID=%s", creditMemoID)
+					}
+					continue
+				}
+
+				cmData, err := s.fetchCreditMemoFromQBO(r.Context(), realmID, creditMemoID)
+				if err != nil {
+					log.Printf("Failed to fetch creditMemo %s: %v", creditMemoID, err)
+					continue
+				}
+
+				if len(cmData.Lines) > 0 && cmData.Lines[0].InvoiceID != "" {
+					invSnap, _ := s.findInvoiceDocByID(r.Context(), cmData.Lines[0].InvoiceID)
+					if invSnap != nil {
+						var inv InvoiceRecord
+						if e := invSnap.DataTo(&inv); e == nil {
+							lastCustomerRef = inv.CustomerRef
+						}
+					}
+				}
+
+				if err := s.storeCreditMemo(r.Context(), cmData); err != nil {
+					log.Printf("Failed to store credit memo doc: %v", err)
+				} else {
+					log.Printf("Stored credit memo doc for creditMemoID=%s", creditMemoID)
+				}
+			}
+
+		}
+	}
+
+	if lastCustomerRef != "" {
+		err := s.recalcTotalBalance(r.Context(), lastCustomerRef)
+		if err != nil {
+			log.Printf("Failed to recalc total_balance for customerRef=%s: %v", lastCustomerRef, err)
+		}
+	}
+
+	// Respond 200 to acknowledge receipt
+	w.WriteHeader(http.StatusOK)
+}
+
+// GENERAL HELPER
+func isDeleteOperation(op string) bool {
+	return strings.EqualFold(op, "Delete") ||
+		strings.EqualFold(op, "Remove") ||
+		strings.EqualFold(op, "Deleted") ||
+		strings.EqualFold(op, "Removed")
+}
+
+func (s *OAuthService) recalcTotalBalance(ctx context.Context, customerRef string) error {
+	parentDocRef := s.firestore.Collection("intuit").Doc(customerRef)
+	invoiceColRef := parentDocRef.Collection("invoices")
+
+	snaps, err := invoiceColRef.Documents(ctx).GetAll()
+	if err != nil {
+		return fmt.Errorf("failed to fetch invoices for %s: %w", customerRef, err)
+	}
+
+	var totalBalance float64
+	var totalHours float64
+
+	for _, snap := range snaps {
+		var inv InvoiceRecord
+		if err := snap.DataTo(&inv); err == nil {
+			totalBalance += inv.Balance
+			totalHours += inv.HoursPurchased
+		} else {
+			log.Printf("Warning: couldn't parse invoice doc %s for customer %s: %v",
+				snap.Ref.ID, customerRef, err)
+		}
+	}
+
+	// Update both 'total_balance' and 'total_hours' in the parent doc
+	_, err = parentDocRef.Set(ctx, map[string]interface{}{
+		"total_balance": totalBalance,
+		"total_hours":   totalHours,
+	}, firestore.MergeAll)
+	if err != nil {
+		return fmt.Errorf("failed to update totals for %s: %w", customerRef, err)
+	}
+
+	log.Printf("Recalculated total_balance=%.2f and total_hours=%.2f for customerRef=%s",
+		totalBalance, totalHours, customerRef)
+	return nil
+}
+
+// HANDLE CREDIT PAYMENTS VIA CREDIT MEMO AND STRUCTS BELOW
+type CreditMemoRecord struct {
+	CreditMemoID string           `firestore:"creditMemoID,omitempty"`
+	DocNumber    string           `firestore:"docNumber,omitempty"`
+	TotalAmt     float64          `firestore:"totalAmt,omitempty"`
+	TxnDate      time.Time        `firestore:"txnDate,omitempty"`
+	Lines        []CreditMemoLine `firestore:"lines,omitempty"`
+}
+
+type CreditMemoLine struct {
+	InvoiceID string  `firestore:"invoiceID,omitempty"`
+	Amount    float64 `firestore:"amount,omitempty"`
+}
+
+func (s *OAuthService) fetchCreditMemoFromQBO(ctx context.Context, realmID, creditMemoID string) (*CreditMemoRecord, error) {
+	token, err := s.getGlobalTokens(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tokens: %w", err)
+	}
+	validToken, err := s.refreshAccessTokenIfExpired(ctx, token, realmID)
+	if err != nil {
+		return nil, fmt.Errorf("refresh token error: %w", err)
+	}
+
+	client := s.config.Client(ctx, validToken)
+	url := fmt.Sprintf("https://sandbox-quickbooks.api.intuit.com/v3/company/%s/creditmemo/%s?minorversion=65", realmID, creditMemoID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create creditmemo request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("creditmemo fetch error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("creditmemo fetch returned status %d", resp.StatusCode)
+	}
+
+	var cmResp struct {
+		CreditMemo struct {
+			ID        string  `json:"Id"`
+			DocNumber string  `json:"DocNumber"`
+			TotalAmt  float64 `json:"TotalAmt"`
+			TxnDate   string  `json:"TxnDate"`
+			Line      []struct {
+				Amount    float64 `json:"Amount"`
+				LinkedTxn []struct {
+					TxnId   string `json:"TxnId"`
+					TxnType string `json:"TxnType"`
+				} `json:"LinkedTxn"`
+			} `json:"Line"`
+		} `json:"CreditMemo"`
+		Time string `json:"time"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&cmResp); err != nil {
+		return nil, fmt.Errorf("failed to decode creditmemo JSON: %w", err)
+	}
+
+	c := cmResp.CreditMemo
+	cmRecord := &CreditMemoRecord{
+		CreditMemoID: c.ID,
+		DocNumber:    c.DocNumber,
+		TotalAmt:     c.TotalAmt,
+	}
+
+	// parse TxnDate
+	if c.TxnDate != "" {
+		if dt, err2 := time.Parse("2006-01-02", c.TxnDate); err2 == nil {
+			cmRecord.TxnDate = dt
+		}
+	}
+
+	// parse lines referencing Invoices
+	var lines []CreditMemoLine
+	for _, l := range c.Line {
+		for _, linked := range l.LinkedTxn {
+			if strings.EqualFold(linked.TxnType, "Invoice") {
+				lines = append(lines, CreditMemoLine{
+					InvoiceID: linked.TxnId,
+					Amount:    l.Amount,
+				})
+			}
+		}
+	}
+	cmRecord.Lines = lines
+
+	return cmRecord, nil
+}
+
+func (s *OAuthService) storeCreditMemo(ctx context.Context, cm *CreditMemoRecord) error {
+	if cm == nil || cm.CreditMemoID == "" {
+		return fmt.Errorf("missing CreditMemoRecord or CreditMemoID")
+	}
+
+	for _, line := range cm.Lines {
+		if line.InvoiceID == "" || line.Amount <= 0 {
+			continue
+		}
+
+		invoiceDocSnap, err := s.findInvoiceDocByID(ctx, line.InvoiceID)
+		if err != nil {
+			log.Printf("Could not find invoice doc for invoiceID=%s: %v", line.InvoiceID, err)
+			continue
+		}
+		if invoiceDocSnap == nil {
+			continue
+		}
+
+		invoiceDocRef := invoiceDocSnap.Ref
+
+		credRef := invoiceDocRef.Collection("credits").Doc(cm.CreditMemoID)
+
+		data := map[string]interface{}{
+			"creditMemoID":    cm.CreditMemoID,
+			"docNumber":       cm.DocNumber,
+			"txnDate":         cm.TxnDate,
+			"amountApplied":   line.Amount,
+			"total_creditAmt": cm.TotalAmt,
+			"created_at":      time.Now(),
+		}
+
+		if _, err := credRef.Set(ctx, data); err != nil {
+			log.Printf("Failed to create credit memo doc in subcollection: %v", err)
+			continue
+		}
+
+		// decrement invoice’s balance
+		_, err = invoiceDocRef.Update(ctx, []firestore.Update{
+			{Path: "balance", Value: firestore.Increment(-line.Amount)},
+		})
+		if err != nil {
+			log.Printf("Failed to update invoice balance for invoiceID=%s: %v", line.InvoiceID, err)
+		} else {
+			log.Printf("Updated invoice %s balance by subtracting credit %.2f", line.InvoiceID, line.Amount)
+		}
+	}
+	return nil
+}
+
+func (s *OAuthService) deleteCreditMemoDoc(ctx context.Context, creditMemoID string) error {
+	colRef := s.firestore.CollectionGroup("credits").
+		Where("creditMemoID", "==", creditMemoID)
+
+	snaps, err := colRef.Documents(ctx).GetAll()
+	if err != nil {
+		return err
+	}
+	for _, snap := range snaps {
+
+		_, err := snap.Ref.Delete(ctx)
+		if err != nil {
+			log.Printf("Failed to delete credit memo doc %s in invoice subcollection: %v", creditMemoID, err)
+		}
+	}
+	return nil
+}
+
+// HANDLE PAYMENT METHODS AND STRUCTS BELOW
+type PaymentRecord struct {
+	PaymentID     string        `firestore:"paymentID,omitempty"`
+	PaymentRefNum string        `firestore:"paymentRefNum,omitempty"` // e.g. check # or reference
+	PaymentMethod string        `firestore:"paymentMethod,omitempty"` // e.g. “Visa”, “Check”
+	TotalAmt      float64       `firestore:"totalAmt,omitempty"`
+	TxnDate       time.Time     `firestore:"txnDate,omitempty"`
+	Lines         []PaymentLine `firestore:"lines,omitempty"` // each line references an invoice
+}
+
+type PaymentLine struct {
+	InvoiceID string  `firestore:"invoiceID,omitempty"` // QBO internal invoice Id
+	Amount    float64 `firestore:"amount,omitempty"`    // portion allocated to that invoice
+}
+
+func (s *OAuthService) fetchPaymentFromQBO(ctx context.Context, realmID, paymentID string) (*PaymentRecord, error) {
+	token, err := s.getGlobalTokens(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tokens: %w", err)
+	}
+	validToken, err := s.refreshAccessTokenIfExpired(ctx, token, realmID)
+	if err != nil {
+		return nil, fmt.Errorf("refresh token error: %w", err)
+	}
+
+	client := s.config.Client(ctx, validToken)
+	url := fmt.Sprintf("https://sandbox-quickbooks.api.intuit.com/v3/company/%s/payment/%s?minorversion=65", realmID, paymentID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create payment request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("payment fetch error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("payment fetch returned status %d", resp.StatusCode)
+	}
+
+	var payResp struct {
+		Payment struct {
+			ID               string  `json:"Id"`
+			PaymentRefNum    string  `json:"PaymentRefNum"` // e.g. check # or reference
+			TotalAmt         float64 `json:"TotalAmt"`
+			TxnDate          string  `json:"TxnDate"` // e.g. 2025-02-04
+			PaymentMethodRef struct {
+				Name  string `json:"name,omitempty"` // sometimes QBO returns just a value
+				Value string `json:"value"`
+			} `json:"PaymentMethodRef"`
+
+			Line []struct {
+				Amount    float64 `json:"Amount"`
+				LinkedTxn []struct {
+					TxnId   string `json:"TxnId"`
+					TxnType string `json:"TxnType"`
+				} `json:"LinkedTxn"`
+			} `json:"Line"`
+		} `json:"Payment"`
+		Time string `json:"time"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&payResp); err != nil {
+		return nil, fmt.Errorf("failed to decode payment JSON: %w", err)
+	}
+
+	p := payResp.Payment
+	payment := &PaymentRecord{
+		PaymentID:     p.ID,
+		PaymentRefNum: p.PaymentRefNum,
+		TotalAmt:      p.TotalAmt,
+	}
+
+	if p.TxnDate != "" {
+		if dt, err2 := time.Parse("2006-01-02", p.TxnDate); err2 == nil {
+			payment.TxnDate = dt
+		}
+	}
+
+	if p.PaymentMethodRef.Name != "" {
+		payment.PaymentMethod = p.PaymentMethodRef.Name
+	} else {
+		payment.PaymentMethod = p.PaymentMethodRef.Value
+	}
+
+	var lines []PaymentLine
+	for _, lineItem := range p.Line {
+		for _, linked := range lineItem.LinkedTxn {
+			if strings.EqualFold(linked.TxnType, "Invoice") {
+				lines = append(lines, PaymentLine{
+					InvoiceID: linked.TxnId,
+					Amount:    lineItem.Amount,
+				})
+			}
+		}
+	}
+	payment.Lines = lines
+
+	return payment, nil
+}
+
+func (s *OAuthService) storePayment(ctx context.Context, pay *PaymentRecord) error {
+	if pay == nil || pay.PaymentID == "" {
+		return fmt.Errorf("missing PaymentRecord or PaymentID")
+	}
+
+	//   intuit/<customerRef>/invoices/<invoiceID>/payments/<paymentID>
+	for _, line := range pay.Lines {
+		if line.InvoiceID == "" || line.Amount <= 0 {
+			continue
+		}
+
+		invoiceDocSnap, err := s.findInvoiceDocByID(ctx, line.InvoiceID)
+		if err != nil {
+			log.Printf("Could not find invoice doc for invoiceID=%s: %v", line.InvoiceID, err)
+			continue
+		}
+		if invoiceDocSnap == nil {
+			// no invoice doc found
+			continue
+		}
+
+		invoiceDocRef := invoiceDocSnap.Ref
+
+		paySubRef := invoiceDocRef.Collection("payments").Doc(pay.PaymentID)
+
+		payDoc := map[string]interface{}{
+			"paymentID":            pay.PaymentID,
+			"paymentRefNum":        pay.PaymentRefNum,
+			"paymentMethod":        pay.PaymentMethod,
+			"txnDate":              pay.TxnDate,
+			"payment_on_invoice":   line.Amount, // partial allocated amount to THIS invoice
+			"total_payment_amount": pay.TotalAmt,
+			"created_at":           time.Now(),
+		}
+
+		if _, err := paySubRef.Set(ctx, payDoc); err != nil {
+			log.Printf("Failed to create payment doc in subcollection: %v", err)
+			continue
+		}
+
+		_, err = invoiceDocRef.Update(ctx, []firestore.Update{
+			{Path: "balance", Value: firestore.Increment(-line.Amount)},
+		})
+		if err != nil {
+			log.Printf("Failed to update invoice balance for invoiceID=%s: %v", line.InvoiceID, err)
+		} else {
+			log.Printf("Updated invoice %s balance by subtracting %.2f", line.InvoiceID, line.Amount)
+		}
+	}
+
+	return nil
+}
+
+func (s *OAuthService) deletePaymentDoc(ctx context.Context, paymentID string) error {
+	colRef := s.firestore.CollectionGroup("payments").
+		Where("paymentID", "==", paymentID)
+
+	snaps, err := colRef.Documents(ctx).GetAll()
+	if err != nil {
+		return err
+	}
+	for _, snap := range snaps {
+		_, err := snap.Ref.Delete(ctx)
+		if err != nil {
+			log.Printf("Failed to delete Payment doc %s in invoice subcollection: %v", paymentID, err)
+		}
+	}
+	return nil
+}
+
+func (s *OAuthService) findInvoiceDocByID(ctx context.Context, invoiceID string) (*firestore.DocumentSnapshot, error) {
+	colRef := s.firestore.CollectionGroup("invoices").
+		Where("invoiceID", "==", invoiceID).
+		Limit(1)
+
+	snaps, err := colRef.Documents(ctx).GetAll()
+	if err != nil {
+		return nil, err
+	}
+	if len(snaps) == 0 {
+		return nil, nil // not found
+	}
+	return snaps[0], nil
+}
+
+// HANDLE INVOICE METHODS AND STRUCTS BELOW
+//
 // Minimal struct for storing invoice data in Firestore
 type InvoiceRecord struct {
 	InvoiceID      string    `firestore:"invoiceID,omitempty"` // the QBO internal ID
@@ -42,80 +586,7 @@ type InvoiceRecord struct {
 	HoursPurchased float64   `firestore:"hoursPurchased,omitempty"`
 }
 
-// HandleWebhook is the HTTP endpoint your QuickBooks webhook calls when an
-// invoice is created/updated in the QBO UI. You must configure this endpoint
-// in the Intuit Developer Portal under your app's "Webhooks" settings.
-func (s *OAuthService) HandleWebhook(w http.ResponseWriter, r *http.Request) {
-	// 1. Read the request body
-	bodyBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Failed to read body", http.StatusInternalServerError)
-		return
-	}
-	defer r.Body.Close()
-
-	// Optional: Validate the webhook signature from Intuit ("intuit-signature" header).
-	// See QBO docs for proper signature verification. We'll skip it for brevity.
-
-	// 2. Parse the JSON payload
-	var webhook WebhookEvent
-	if err := json.Unmarshal(bodyBytes, &webhook); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid JSON: %v", err), http.StatusBadRequest)
-		return
-	}
-
-	// 3. For each event notification, check the realmId and the entities
-	for _, note := range webhook.EventNotifications {
-		realmID := note.RealmID
-
-		// The dataChangeEvent -> entities. They might be multiple.
-		for _, entity := range note.DataChangeEvent.Entities {
-
-			log.Printf("[Webhook Debug] entity.Name=%s, entity.ID=%s, entity.Operation=%s",
-				entity.Name, entity.ID, entity.Operation)
-			// Check if it's an Invoice event
-			if strings.EqualFold(entity.Name, "Invoice") {
-				invoiceID := entity.ID
-				operation := entity.Operation
-
-				if strings.EqualFold(operation, "Delete") ||
-					strings.EqualFold(operation, "Remove") ||
-					strings.EqualFold(operation, "Deleted") ||
-					strings.EqualFold(operation, "Removed") {
-					// We skip fetching from QBO because the invoice is gone
-					err := s.deleteInvoiceDoc(r.Context(), invoiceID)
-					if err != nil {
-						log.Printf("Failed to delete invoice doc %s: %v\n", invoiceID, err)
-					} else {
-						log.Printf("Webhook: successfully handled delete event for invoice %s\n", invoiceID)
-					}
-					continue
-				}
-
-				// otherwise handle create/update/void
-				invData, err := s.fetchInvoiceFromQBO(r.Context(), realmID, invoiceID)
-				if err != nil {
-					log.Printf("Failed to fetch invoice %s from realm %s: %v\n", invoiceID, realmID, err)
-					continue
-				}
-
-				// Store it in Firestore: intuit/<customerRef>/invoices/<invoiceID>
-				err = s.storeInvoice(r.Context(), invData)
-				if err != nil {
-					log.Printf("Failed to store invoice in Firestore: %v\n", err)
-				} else {
-					log.Printf("Webhook: successfully handled %s event for invoice %s\n", operation, invoiceID)
-				}
-			}
-		}
-	}
-
-	// Respond 200 to acknowledge receipt
-	w.WriteHeader(http.StatusOK)
-}
-
-func (s *OAuthService) deleteInvoiceDoc(ctx context.Context, invoiceID string) error {
-	//   Look for doc where invoiceId == invoiceID
+func (s *OAuthService) deleteInvoiceDoc(ctx context.Context, invoiceID string) (string, error) {
 	log.Printf("deleteInvoiceDoc called for invoiceID=%s", invoiceID)
 	colRef := s.firestore.CollectionGroup("invoices").
 		Where("invoiceID", "==", invoiceID).
@@ -123,22 +594,26 @@ func (s *OAuthService) deleteInvoiceDoc(ctx context.Context, invoiceID string) e
 
 	snaps, err := colRef.Documents(ctx).GetAll()
 	if err != nil {
-		return err
+		return "", err
 	}
 	if len(snaps) == 0 {
-		// doc not found, maybe it's already deleted
-		return nil
+		return "", nil
+	}
+
+	var inv InvoiceRecord
+	if err := snaps[0].DataTo(&inv); err != nil {
+		log.Printf("Failed to parse invoice data for doc %s: %v", snaps[0].Ref.ID, err)
+		// but we can still delete it
 	}
 
 	docRef := snaps[0].Ref
 	if _, err := docRef.Delete(ctx); err != nil {
-		return fmt.Errorf("failed to delete invoice doc %s: %w", invoiceID, err)
+		return "", fmt.Errorf("failed to delete invoice doc %s: %w", invoiceID, err)
 	}
-	return nil
+	return inv.CustomerRef, nil
 }
 
 func (s *OAuthService) fetchCustomerFromQBO(ctx context.Context, realmID, customerID string) (string, error) {
-	// Reuse your getGlobalTokens -> refreshAccessTokenIfExpired logic
 	token, err := s.getGlobalTokens(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to get tokens: %w", err)
@@ -167,12 +642,10 @@ func (s *OAuthService) fetchCustomerFromQBO(ctx context.Context, realmID, custom
 		return "", fmt.Errorf("customer fetch returned status %d", resp.StatusCode)
 	}
 
-	// Minimal structure for a QBO customer
 	var custResp struct {
 		Customer struct {
 			Id               string `json:"Id"`
 			PrimaryEmailAddr string `json:"PrimaryEmailAddr"`
-			// or "PrimaryEmailAddr": { "Address": "..."} if QBO returns it as an object
 		} `json:"Customer"`
 	}
 
@@ -183,25 +656,18 @@ func (s *OAuthService) fetchCustomerFromQBO(ctx context.Context, realmID, custom
 	return custResp.Customer.PrimaryEmailAddr, nil
 }
 
-// fetchInvoiceFromQBO retrieves the full invoice details via the QuickBooks API.
-// We'll also refresh the token if needed.
 func (s *OAuthService) fetchInvoiceFromQBO(ctx context.Context, realmID, invoiceID string) (*InvoiceRecord, error) {
-	// 1. Retrieve your stored OAuth tokens from somewhere. If you do only
-	//    one realm for your whole business, you might store them in some
-	//    known doc, or you have them in the parent's doc. For now, let's
-	//    assume you have them at s.getGlobalTokens(...) or similar.
+
 	token, err := s.getGlobalTokens(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get global tokens: %w", err)
 	}
 
-	// 2. Refresh if expired
 	validToken, err := s.refreshAccessTokenIfExpired(ctx, token, realmID)
 	if err != nil {
 		return nil, fmt.Errorf("refresh token error: %w", err)
 	}
 
-	// 3. Build the request to QBO API
 	client := s.config.Client(ctx, validToken)
 	url := fmt.Sprintf("https://sandbox-quickbooks.api.intuit.com/v3/company/%s/invoice/%s?minorversion=65", realmID, invoiceID)
 
@@ -211,7 +677,6 @@ func (s *OAuthService) fetchInvoiceFromQBO(ctx context.Context, realmID, invoice
 	}
 	req.Header.Set("Accept", "application/json")
 
-	// 4. Execute request
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("invoice fetch error: %w", err)
@@ -222,7 +687,6 @@ func (s *OAuthService) fetchInvoiceFromQBO(ctx context.Context, realmID, invoice
 		return nil, fmt.Errorf("invoice fetch returned status %d", resp.StatusCode)
 	}
 
-	// 5. Parse the invoice JSON
 	var invoiceResp struct {
 		Invoice struct {
 			ID          string `json:"Id"`
@@ -230,11 +694,9 @@ func (s *OAuthService) fetchInvoiceFromQBO(ctx context.Context, realmID, invoice
 			CustomerRef struct {
 				Value string `json:"value"`
 			} `json:"CustomerRef"`
-			// BillEmail to collect email address
 			BillEmail struct {
 				Address string `json:"Address"`
 			} `json:"BillEmail"`
-			// "TxnDate", "DueDate", etc., if you want them
 			Balance  float64 `json:"Balance"`
 			MetaData struct {
 				CreateTime      string `json:"CreateTime"`
@@ -245,7 +707,6 @@ func (s *OAuthService) fetchInvoiceFromQBO(ctx context.Context, realmID, invoice
 				Amount              float64 `json:"Amount"`
 				SalesItemLineDetail struct {
 					Qty float64 `json:"Qty"`
-					// Possibly UnitPrice, etc.
 				} `json:"SalesItemLineDetail,omitempty"`
 			} `json:"Line"`
 		} `json:"Invoice"`
@@ -256,16 +717,13 @@ func (s *OAuthService) fetchInvoiceFromQBO(ctx context.Context, realmID, invoice
 		return nil, fmt.Errorf("failed to decode invoice JSON: %w", err)
 	}
 
-	// 6. Extract relevant fields for Firestore
 	invoice := invoiceResp.Invoice
 	docNumber := invoice.DocNumber
 	createTime, _ := time.Parse(time.RFC3339, invoice.MetaData.CreateTime)
 	updateTime, _ := time.Parse(time.RFC3339, invoice.MetaData.LastUpdatedTime)
 
-	// Attempt to parse BillEmail
 	billEmail := invoice.BillEmail.Address
 
-	// If it's empty, fetch from the Customer record
 	if billEmail == "" {
 		log.Printf("Invoice %s in realm %s has no BillEmail, fetching customer record...\n", invoiceID, realmID)
 		custEmail, err2 := s.fetchCustomerFromQBO(ctx, realmID, invoice.CustomerRef.Value)
@@ -298,8 +756,6 @@ func (s *OAuthService) fetchInvoiceFromQBO(ctx context.Context, realmID, invoice
 	return invRecord, nil
 }
 
-// storeInvoice writes the invoice to Firestore under:
-// `intuit/<customerRef>/invoices/<invoiceId>` doc.
 func (s *OAuthService) storeInvoice(ctx context.Context, inv *InvoiceRecord) error {
 	if inv == nil {
 		return fmt.Errorf("invoice is nil")
@@ -321,7 +777,6 @@ func (s *OAuthService) storeInvoice(ctx context.Context, inv *InvoiceRecord) err
 		return fmt.Errorf("failed to store invoice record: %w", err)
 	}
 
-	//auto association
 	if err := s.autoAssociateParent(ctx, inv); err != nil {
 		log.Printf("AutoAssociateParent fucntion error: %v\n", err)
 	}
@@ -334,7 +789,6 @@ func (s *OAuthService) autoAssociateParent(ctx context.Context, inv *InvoiceReco
 		return nil
 	}
 
-	// 1. If there's already a doc with business.qboCustomerId == inv.CustomerRef, skip
 	alreadyLinked, err := s.findParentWithQboId(ctx, inv.CustomerRef)
 	if err != nil {
 		return err
@@ -344,7 +798,6 @@ func (s *OAuthService) autoAssociateParent(ctx context.Context, inv *InvoiceReco
 		return nil
 	}
 
-	// 2. Find parent doc by email
 	parentsSnap, err := s.firestore.Collection("parents").
 		Where("email", "==", inv.BillEmail).
 		Limit(1).
@@ -358,8 +811,6 @@ func (s *OAuthService) autoAssociateParent(ctx context.Context, inv *InvoiceReco
 
 	parentDoc := parentsSnap[0]
 
-	// 3. Read parent's "business" sub-document (a map) if it exists
-	// We'll do a normal .Data() read, then parse out "business" if it exists
 	pData := parentDoc.Data()
 
 	var businessData map[string]interface{}
@@ -373,10 +824,8 @@ func (s *OAuthService) autoAssociateParent(ctx context.Context, inv *InvoiceReco
 
 	qboId, _ := businessData["qboCustomerId"].(string)
 
-	// 4. If empty, set it
 	if qboId == "" {
 		businessData["qboCustomerId"] = inv.CustomerRef
-		// update parent doc with new "business" map
 		_, err := parentDoc.Ref.Set(ctx, map[string]interface{}{
 			"business": businessData,
 		}, firestore.MergeAll)
@@ -396,7 +845,6 @@ func (s *OAuthService) findParentWithQboId(ctx context.Context, qboId string) (b
 	if qboId == "" {
 		return false, nil
 	}
-	// A normal query on "parents" for field "business.qboCustomerId" = qboId
 	snap, err := s.firestore.Collection("parents").
 		Where("business.qboCustomerId", "==", qboId).
 		Limit(1).
@@ -407,16 +855,11 @@ func (s *OAuthService) findParentWithQboId(ctx context.Context, qboId string) (b
 	return len(snap) > 0, nil
 }
 
-// getGlobalTokens is an example of retrieving your QBO tokens from Firestore or environment.
 func (s *OAuthService) getGlobalTokens(ctx context.Context) (*oauth2.Token, error) {
-	// If tokens are stored at "intuit/globalTokens" under a sub-doc named "intuitoauth",
-	// we need to parse that exact structure.
 	docSnap, err := s.firestore.Collection("intuit").Doc("globalTokens").Get(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	// We'll define a small struct to capture the nested "intuitoauth" part.
 	var data struct {
 		Intuitoauth struct {
 			AccessToken  string    `firestore:"accessToken"`
@@ -430,7 +873,6 @@ func (s *OAuthService) getGlobalTokens(ctx context.Context) (*oauth2.Token, erro
 		return nil, err
 	}
 
-	// Now pull fields out of data.Intuitoauth
 	return &oauth2.Token{
 		AccessToken:  data.Intuitoauth.AccessToken,
 		RefreshToken: data.Intuitoauth.RefreshToken,
@@ -439,8 +881,6 @@ func (s *OAuthService) getGlobalTokens(ctx context.Context) (*oauth2.Token, erro
 	}, nil
 }
 
-// refreshAccessTokenIfExpired is a helper from previous code that checks if token is expired,
-// and if so, refreshes it using the refresh token.
 func (s *OAuthService) refreshAccessTokenIfExpired(ctx context.Context, tok *oauth2.Token, oldRealmID string) (*oauth2.Token, error) {
 	if tok.Valid() {
 		return tok, nil
@@ -452,7 +892,6 @@ func (s *OAuthService) refreshAccessTokenIfExpired(ctx context.Context, tok *oau
 		return nil, fmt.Errorf("failed to refresh token: %w", err)
 	}
 
-	// Save newTok back under `intuitoauth`
 	err = s.updateGlobalTokens(ctx, newTok, oldRealmID)
 	if err != nil {
 		return nil, err
@@ -462,7 +901,6 @@ func (s *OAuthService) refreshAccessTokenIfExpired(ctx context.Context, tok *oau
 }
 
 func (s *OAuthService) updateGlobalTokens(ctx context.Context, newTok *oauth2.Token, realmID string) error {
-	// Build a new TokenInfo.
 	updated := TokenInfo{
 		AccessToken:  newTok.AccessToken,
 		RefreshToken: newTok.RefreshToken,
@@ -471,7 +909,6 @@ func (s *OAuthService) updateGlobalTokens(ctx context.Context, newTok *oauth2.To
 		RealmID:      realmID,
 	}
 
-	// Write it under "intuitoauth" just like storeTokens does.
 	_, err := s.firestore.Collection("intuit").Doc("globalTokens").
 		Set(ctx, map[string]interface{}{
 			"intuitoauth": updated,
