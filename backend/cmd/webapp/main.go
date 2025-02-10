@@ -131,12 +131,6 @@ func main() {
 		SecretKey:       secretKey,
 	}
 
-	// Initialize Intuit OAuth Services
-	intuitOAuthSvc, err := intuitoauth.NewOAuthService(context.Background(), firestoreClient)
-	if err != nil {
-		log.Fatalf("Failed to init Intuit OAuth Service: %v", err)
-	}
-
 	// Initialize parent App
 	parentApp := parentpkg.App{
 		Config:          cfg,
@@ -159,6 +153,12 @@ func main() {
 	firestoreUpdaterApp := firestoreupdater.App{
 		Config:          cfg,
 		FirestoreClient: firestoreClient,
+	}
+
+	// Initialize Intuit OAuth Services
+	intuitOAuthSvc, err := intuitoauth.NewOAuthService(context.Background(), firestoreClient)
+	if err != nil {
+		log.Fatalf("Failed to init Intuit OAuth Service: %v", err)
 	}
 
 	// Set up the HTTP server and routes using gorilla/mux
@@ -227,6 +227,16 @@ func main() {
 		authMiddleware(http.HandlerFunc(parentApp.AttemptAutomaticAssociation)).ServeHTTP(w, r)
 	}).Methods("POST", "OPTIONS")
 
+	// api request for hours/and balance
+	r.HandleFunc("/api/dashboard/total-hours-and-balance", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			// Handle preflight request
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(dashboardApp.TotalHoursAndBalanceHandler)).ServeHTTP(w, r)
+	}).Methods("GET", "OPTIONS")
+
 	// Auth status route
 	r.Handle("/api/auth/status", authMiddleware(http.HandlerFunc(authApp.StatusHandler))).Methods("GET", "OPTIONS")
 
@@ -239,6 +249,18 @@ func main() {
 		}
 		authMiddleware(http.HandlerFunc(dashboardApp.ParentHandler)).ServeHTTP(w, r)
 	}).Methods("GET", "OPTIONS")
+
+	// intuit related handlers including oauth
+	r.HandleFunc("/internal/intuit/oauth", func(w http.ResponseWriter, r *http.Request) {
+		intuitOAuthSvc.HandleAuthRedirect(w, r)
+	}).Methods("GET")
+
+	r.HandleFunc("/internal/intuit/callback", func(w http.ResponseWriter, r *http.Request) {
+		intuitOAuthSvc.HandleCallback(w, r)
+	}).Methods("GET")
+
+	// intuit webhook for keeping invoices up to date
+	r.HandleFunc("/internal/intuit/webhook", intuitOAuthSvc.HandleWebhook).Methods("POST")
 
 	// OAUTH HANDLERS
 
@@ -263,30 +285,6 @@ func main() {
 	// Apple OAuth handlers
 	r.HandleFunc("/internal/appleauth/oauth", appleApp.OAuthHandler).Methods("GET")
 	r.HandleFunc("/internal/appleauth/callback", appleApp.OAuthCallbackHandler).Methods("POST")
-
-	// Intuit OAuth handlers
-	r.HandleFunc("/internal/intuit/oauth", func(w http.ResponseWriter, r *http.Request) {
-		// Usually a GET request to start OAuth
-		intuitOAuthSvc.HandleAuthRedirect(w, r)
-	}).Methods("GET")
-
-	r.HandleFunc("/internal/intuit/callback", func(w http.ResponseWriter, r *http.Request) {
-		// Callback from Intuit
-		intuitOAuthSvc.HandleCallback(w, r)
-	}).Methods("GET")
-
-	// intuit webhook for keeping invoices up to date
-	r.HandleFunc("/internal/intuit/webhook", intuitOAuthSvc.HandleWebhook).Methods("POST")
-
-	// test to ensure token is being found -- uncomment for futuer testing.
-	// r.HandleFunc("/internal/intuit/testtoken", func(w http.ResponseWriter, r *http.Request) {
-	// 	tok, err := intuitOAuthSvc.Token(r.Context())
-	// 	if err != nil {
-	// 		http.Error(w, "Failed to get token: "+err.Error(), http.StatusInternalServerError)
-	// 		return
-	// 	}
-	// 	w.Write([]byte("Current Access Token: " + tok.AccessToken))
-	// }).Methods("GET")
 
 	// Firestore Updater Routes with CORS and OPTIONS handling
 

@@ -1,5 +1,3 @@
-// src/components/BookingPage.js
-
 import React, { useEffect, useState, useContext } from 'react';
 import { API_BASE_URL } from '../config';
 import { useNavigate } from 'react-router-dom';
@@ -22,12 +20,12 @@ import {
   Avatar,
   useMediaQuery,
   useTheme,
+  Link,
 } from '@mui/material';
-import Link from '@mui/material/Link';
 import { styled } from '@mui/system';
 import { tutorBookingLinks } from '../config/TutorBookingLinks';
 
-// Tutor Images
+// Tutor images
 import ben from '../assets/ben.jpg';
 import edward from '../assets/edward.jpg';
 import kieran from '../assets/kieran.jpg';
@@ -104,6 +102,10 @@ const BookingPage = () => {
   const [parentPicture, setParentPicture] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // NEW: We'll store the fetched total_hours/total_balance from the new endpoint.
+  const [lifetimeHours, setLifetimeHours] = useState('0');
+  const [remainingBalance, setRemainingBalance] = useState('0');
+
   const authState = useContext(AuthContext);
   const navigate = useNavigate();
 
@@ -140,6 +142,39 @@ const BookingPage = () => {
       });
   }, [navigate]);
 
+  // ---- Fetch total_hours and total_balance from new endpoint ----
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      navigate('/');
+      return;
+    }
+
+    fetch(`${API_BASE_URL}/api/dashboard/total-hours-and-balance`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('Failed to fetch total hours and balance');
+        }
+        return response.json();
+      })
+      .then((data) => {
+        // If the backend returns strings, store them directly.
+        // e.g. data = { total_balance: "12.5", total_hours: "10" }
+        setLifetimeHours(data.total_hours || '0');
+        setRemainingBalance(data.total_balance || '0');
+      })
+      .catch((err) => {
+        console.error('Error fetching total hours and balance:', err);
+        setLifetimeHours('0');
+        setRemainingBalance('0');
+      });
+  }, [navigate]);
+
   // ---- Fetch Associated Students & Their Data ----
   useEffect(() => {
     const token = localStorage.getItem('authToken');
@@ -164,7 +199,7 @@ const BookingPage = () => {
       .then((data) => {
         const associatedStudents = data.associatedStudents || [];
         if (associatedStudents.length > 0) {
-          // Fetch student data
+          // Fetch each student's data
           fetchStudentsData(associatedStudents, token, queriedStudentID);
         } else {
           // If no students, redirect to intake
@@ -216,7 +251,7 @@ const BookingPage = () => {
       });
   };
 
-  // ---- Handlers ----
+  // ---- Handler for student dropdown ----
   const handleStudentChange = (event) => {
     const newStudentID = event.target.value;
     setSelectedStudentID(newStudentID);
@@ -251,16 +286,11 @@ const BookingPage = () => {
     );
   }
 
-  // ---- Data Access ----
+  // ---- Access the currently selected student data ----
   const selectedStudent = studentsData.find(
     (student) => student.studentID === selectedStudentID
   );
   const tutors = selectedStudent?.business.associated_tutors || [];
-
-  // Example hour calculations (replace with your actual logic/data)
-  const totalHoursPurchased = selectedStudent?.business.totalHoursPurchased || 0;
-  const totalHoursUsed = selectedStudent?.business.totalHoursUsed || 0;
-  const totalHoursRemaining = totalHoursPurchased - totalHoursUsed;
 
   return (
     <Box sx={{ backgroundColor: lightBackground, minHeight: '100vh' }}>
@@ -445,7 +475,6 @@ const BookingPage = () => {
             alignItems="center"
             sx={{ marginBottom: '16px' }}
           >
-            {/* Updated Title: "so-and-so's Tutors:" */}
             <SectionTitle variant="h5" sx={{ m: 0 }}>
               {selectedStudent?.personal.name
                 ? `${selectedStudent.personal.name}'s Tutors:`
@@ -471,13 +500,8 @@ const BookingPage = () => {
 
           <Divider sx={{ marginBottom: '24px' }} />
 
-          {/*
-            We set order={{ xs: 1, md: 2 }} on the hours breakdown so it appears FIRST on mobile,
-            and order={{ xs: 2, md: 1 }} on the tutors so it appears SECOND on mobile.
-            On desktop (md), they switch to their original positions.
-          */}
           <Grid container spacing={4} alignItems="stretch">
-            {/* ---------- Right Column: Hours Breakdown (FIRST on mobile) ---------- */}
+            {/* ---------- Right Column: Hours/Billing Overview ---------- */}
             <Grid
               item
               xs={12}
@@ -501,32 +525,29 @@ const BookingPage = () => {
               >
                 <Box>
                   <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-                    Hours Breakdown
+                    Hours & Billing Overview
                   </Typography>
                   <Typography variant="body1" sx={{ mb: 1 }}>
-                    <strong>Total Hours Purchased:</strong> {totalHoursPurchased}
-                  </Typography>
-                  <Typography variant="body1" sx={{ mb: 1 }}>
-                    <strong>Total Hours Used:</strong> {totalHoursUsed}
+                    <strong>Lifetime Hours:</strong> {lifetimeHours}
                   </Typography>
                   <Typography variant="body1">
-                    <strong>Total Hours Remaining:</strong> {totalHoursRemaining}
+                    <strong>Remaining Balance:</strong> {remainingBalance}
                   </Typography>
                 </Box>
 
                 <Box sx={{ mt: 2 }}>
                   <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
-                  Please contact{' '}
-                  <Link href="mailto:admin@leetutoring.com" underline="hover">
-                    admin@leetutoring.com
-                  </Link>{' '}
-                  to purchase more hours if needed.
-                </Typography>
+                    Please contact{' '}
+                    <Link href="mailto:admin@leetutoring.com" underline="hover">
+                      admin@leetutoring.com
+                    </Link>{' '}
+                    to purchase more hours if needed.
+                  </Typography>
                 </Box>
               </Box>
             </Grid>
 
-            {/* ---------- Left Column: Tutor Cards (SECOND on mobile) ---------- */}
+            {/* ---------- Left Column: Tutor Cards ---------- */}
             <Grid
               item
               xs={12}
