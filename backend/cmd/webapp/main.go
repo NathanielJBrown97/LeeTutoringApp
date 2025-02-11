@@ -255,6 +255,15 @@ func main() {
 		authMiddleware(http.HandlerFunc(dashboardApp.UpdateParentUsedHoursHandler)).ServeHTTP(w, r)
 	}).Methods("POST", "OPTIONS")
 
+	// gets all parent data related to invoices, payments, voids, ect.
+	r.HandleFunc("/api/parent/invoices", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(dashboardApp.GetParentInvoicesHandler)).ServeHTTP(w, r)
+	}).Methods("GET", "OPTIONS")
+
 	// Auth status route
 	r.Handle("/api/auth/status", authMiddleware(http.HandlerFunc(authApp.StatusHandler))).Methods("GET", "OPTIONS")
 

@@ -938,7 +938,7 @@ const ParentDashboard = () => {
                       variant="subtitle1"
                       sx={{ fontWeight: 'bold', mb: 1 }}
                     >
-                      Appointment Date: {formattedDate}
+                      {formattedDate}
                     </Typography>
                     <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
                       Homework Completed: {percentage}

@@ -21,9 +21,21 @@ import {
   useMediaQuery,
   useTheme,
   Link,
+  IconButton,
+  Slide,
 } from '@mui/material';
 import { styled } from '@mui/system';
 import { tutorBookingLinks } from '../config/TutorBookingLinks';
+
+// NEW imports for accordion
+import Accordion from '@mui/material/Accordion';
+import AccordionSummary from '@mui/material/AccordionSummary';
+import AccordionDetails from '@mui/material/AccordionDetails';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+
+// MUI icons for scrolling
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 
 // Tutor images
 import ben from '../assets/ben.jpg';
@@ -95,6 +107,31 @@ const tutorImages = {
   eli,
 };
 
+// 1) Utility to format RFC3339 strings into "Month DD, YYYY at HH:MM:SS AM/PM TZ"
+function formatDateTime(rfcString) {
+  if (!rfcString) return 'N/A';
+  const dt = new Date(rfcString);
+  // Check if it's a valid date
+  if (isNaN(dt.getTime())) return 'N/A';
+
+  // Format date as "Month Day, Year"
+  const datePart = dt.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+  // Format time as "HH:MM:SS AM/PM TZ"
+  const timePart = dt.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZoneName: 'short',
+    hour12: true,
+  });
+
+  return `${datePart} at ${timePart}`;
+}
+
 const BookingPage = () => {
   const [studentsData, setStudentsData] = useState([]);
   const [selectedStudentID, setSelectedStudentID] = useState(null);
@@ -102,7 +139,7 @@ const BookingPage = () => {
   const [parentPicture, setParentPicture] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // NEW: We'll store the fetched total_hours/total_balance from the new endpoint.
+  // We'll store the fetched total_hours/total_balance from the new endpoint.
   const [lifetimeHours, setLifetimeHours] = useState('0');
   const [remainingBalance, setRemainingBalance] = useState('0');
 
@@ -111,6 +148,59 @@ const BookingPage = () => {
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  // ---- Toggle for "Invoice & Billing Details" view ----
+  const [invoiceView, setInvoiceView] = useState(false);
+
+  const handleInvoiceViewToggle = () => {
+    setInvoiceView((prev) => !prev);
+  };
+
+  // ---- State for storing parent's invoices
+  const [invoices, setInvoices] = useState([]);
+
+  // ---- SCROLLER STATE FOR INVOICES ----
+  const [startIndexInvoices, setStartIndexInvoices] = useState(0);
+  const [scrollDirectionInvoices, setScrollDirectionInvoices] = useState('down');
+
+  // We'll show 3 invoices at a time
+  // 1) Sort the invoices descending (prefer createdTime if valid, else docNumber)
+  const sortedInvoices = [...invoices].sort((a, b) => {
+    // Attempt to parse createdTime
+    const dateA = new Date(a.createdTime);
+    const dateB = new Date(b.createdTime);
+    if (!isNaN(dateA) && !isNaN(dateB)) {
+      // Descending by createdTime
+      return dateB - dateA;
+    } else if (!isNaN(dateA) && isNaN(dateB)) {
+      return -1; // A is valid, B is not => A comes first
+    } else if (isNaN(dateA) && !isNaN(dateB)) {
+      return 1; // B is valid, A is not => B comes first
+    } else {
+      // Both are invalid => fall back to docNumber descending
+      const numA = parseInt(a.docNumber, 10) || 0;
+      const numB = parseInt(b.docNumber, 10) || 0;
+      return numB - numA;
+    }
+  });
+  // 2) Slice out 3 invoices at a time
+  const invoicesToShow = sortedInvoices.slice(
+    startIndexInvoices,
+    startIndexInvoices + 3
+  );
+
+  const handlePrevInvoice = () => {
+    if (startIndexInvoices > 0) {
+      setScrollDirectionInvoices('up');
+      setStartIndexInvoices((prev) => prev - 1);
+    }
+  };
+  const handleNextInvoice = () => {
+    if (startIndexInvoices + 3 < sortedInvoices.length) {
+      setScrollDirectionInvoices('down');
+      setStartIndexInvoices((prev) => prev + 1);
+    }
+  };
 
   // ---- Fetch Parent Data ----
   useEffect(() => {
@@ -163,8 +253,6 @@ const BookingPage = () => {
         return response.json();
       })
       .then((data) => {
-        // If the backend returns strings, store them directly.
-        // e.g. data = { total_balance: "12.5", total_hours: "10" }
         setLifetimeHours(data.total_hours || '0');
         setRemainingBalance(data.total_balance || '0');
       })
@@ -174,6 +262,9 @@ const BookingPage = () => {
         setRemainingBalance('0');
       });
   }, [navigate]);
+
+  // ---- Update student's lifetime hours when selectedStudentID changes ----
+  const [studentLifetimeHours, setStudentLifetimeHours] = useState(null);
 
   useEffect(() => {
     if (selectedStudentID) {
@@ -186,30 +277,32 @@ const BookingPage = () => {
       })
         .then((res) => {
           if (!res.ok) {
-            throw new Error(`Failed to update student lifetime hours. Status: ${res.status}`);
+            throw new Error(
+              `Failed to update student lifetime hours. Status: ${res.status}`
+            );
           }
           return res.json();
         })
         .then((data) => {
-          // The handler returns data.lifetime_hours
           setStudentLifetimeHours(data.lifetime_hours);
         })
         .catch((err) => {
           console.error('Error updating student lifetime hours:', err);
-          setStudentLifetimeHours(null); 
+          setStudentLifetimeHours(null);
         });
     }
   }, [selectedStudentID]);
+
   // ----- Fetch Parent Remaining Hours / Student Remaining Hours ------
+  const [parentRemainingHours, setParentRemainingHours] = useState('0');
+
   useEffect(() => {
-    // 1) Get auth token
     const token = localStorage.getItem('authToken');
     if (!token) {
       navigate('/');
       return;
     }
-  
-    // 2) Call the parent's update endpoint
+
     fetch(`${API_BASE_URL}/api/parent/update_used_hours`, {
       method: 'POST',
       headers: {
@@ -223,7 +316,6 @@ const BookingPage = () => {
         return res.json();
       })
       .then((data) => {
-        // 3) data.parent_remaining_hours => parent's current remaining hours
         if (typeof data.parent_remaining_hours === 'number') {
           setParentRemainingHours(data.parent_remaining_hours.toString());
         } else {
@@ -235,8 +327,12 @@ const BookingPage = () => {
         setParentRemainingHours('N/A');
       });
   }, [navigate]);
-  
+
   // ---- Fetch Associated Students & Their Data ----
+  const [loadingState, setLoadingState] = useState(false);
+
+
+
   useEffect(() => {
     const token = localStorage.getItem('authToken');
 
@@ -272,9 +368,6 @@ const BookingPage = () => {
         setLoading(false);
       });
   }, [navigate]);
-
-  const [studentLifetimeHours, setStudentLifetimeHours] = useState(null);
-  const [parentRemainingHours, setParentRemainingHours] = useState('0');
 
   const fetchStudentsData = (studentIDs, token, queriedStudentID) => {
     const fetchPromises = studentIDs.map((studentID) =>
@@ -314,6 +407,42 @@ const BookingPage = () => {
         setLoading(false);
       });
   };
+
+  // ---- Only fetch invoices if invoiceView is true ----
+  useEffect(() => {
+    if (invoiceView) {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        navigate('/');
+        return;
+      }
+
+      // Call your new endpoint: /api/parent/invoices
+      fetch(`${API_BASE_URL}/api/parent/invoices`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            const msg = await res.text();
+            throw new Error(`Failed to fetch invoices: ${res.status} - ${msg}`);
+          }
+          return res.json();
+        })
+        .then((data) => {
+          // data should have { parentID: string, invoices: [] }
+          setInvoices(data.invoices || []);
+          // Reset the scroller whenever we first load
+          setStartIndexInvoices(0);
+          setScrollDirectionInvoices('down');
+        })
+        .catch((err) => {
+          console.error('Error fetching invoices:', err);
+        });
+    }
+  }, [invoiceView, navigate]);
 
   // ---- Handler for student dropdown ----
   const handleStudentChange = (event) => {
@@ -478,61 +607,64 @@ const BookingPage = () => {
         </Toolbar>
       </StyledAppBar>
 
-      {/* ---------- Hero Section ---------- */}
-      <Container maxWidth="xl" sx={{ marginTop: '24px' }}>
-        <HeroSection>
-          {/* Single row: "Booking for:" + dropdown */}
-          <Box
-            display="flex"
-            alignItems="center"
-            flexWrap="nowrap"
-            gap={2}
-            sx={{
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <Typography
-              variant={isMobile ? 'h6' : 'h5'}
-              sx={{ fontWeight: 700, m: 0 }}
-            >
-              Booking for:
-            </Typography>
-
-            <Select
-              size="small"
-              value={selectedStudentID}
-              onChange={handleStudentChange}
-              variant="outlined"
+      {/* ---------- Hero Section (Hidden if invoiceView) ---------- */}
+      {!invoiceView && (
+        <Container maxWidth="xl" sx={{ marginTop: '24px' }}>
+          <HeroSection>
+            {/* Single row: "Booking for:" + dropdown */}
+            <Box
+              display="flex"
+              alignItems="center"
+              flexWrap="nowrap"
+              gap={2}
               sx={{
-                height: 40,
-                backgroundColor: '#fff',
-                borderRadius: '8px',
-                fontWeight: 500,
-                minWidth: isMobile ? 140 : 180,
+                whiteSpace: 'nowrap',
               }}
             >
-              {studentsData.map((student) => (
-                <MenuItem key={student.studentID} value={student.studentID}>
-                  {student.personal.name || 'Unnamed Student'}
-                </MenuItem>
-              ))}
-            </Select>
-          </Box>
+              <Typography
+                variant={isMobile ? 'h6' : 'h5'}
+                sx={{ fontWeight: 700, m: 0 }}
+              >
+                Booking for:
+              </Typography>
 
-          <Box mt={2}>
-            <Typography
-              variant={isMobile ? 'body1' : 'h6'}
-              sx={{ opacity: 0.9 }}
-            >
-              Book your student's next appointment below.
-            </Typography>
-          </Box>
-        </HeroSection>
-      </Container>
+              <Select
+                size="small"
+                value={selectedStudentID}
+                onChange={handleStudentChange}
+                variant="outlined"
+                sx={{
+                  height: 40,
+                  backgroundColor: '#fff',
+                  borderRadius: '8px',
+                  fontWeight: 500,
+                  minWidth: isMobile ? 140 : 180,
+                }}
+              >
+                {studentsData.map((student) => (
+                  <MenuItem key={student.studentID} value={student.studentID}>
+                    {student.personal.name || 'Unnamed Student'}
+                  </MenuItem>
+                ))}
+              </Select>
+            </Box>
+
+            <Box mt={2}>
+              <Typography
+                variant={isMobile ? 'body1' : 'h6'}
+                sx={{ opacity: 0.9 }}
+              >
+                Book your student's next appointment below.
+              </Typography>
+            </Box>
+          </HeroSection>
+        </Container>
+      )}
 
       {/* ---------- Tutors & Hours Section ---------- */}
       <Container maxWidth="xl">
         <InfoSection>
+          {/* Top row with Section Title and Buttons */}
           <Box
             display="flex"
             justifyContent="space-between"
@@ -540,194 +672,489 @@ const BookingPage = () => {
             sx={{ marginBottom: '16px' }}
           >
             <SectionTitle variant="h5" sx={{ m: 0 }}>
-              {selectedStudent?.personal.name
+              {invoiceView
+                ? 'Invoice Overview and Billing Details'
+                : selectedStudent?.personal.name
                 ? `${selectedStudent.personal.name}'s Tutors:`
                 : 'Student’s Tutors:'}
             </SectionTitle>
 
-            <Button
-              onClick={handleBackToDashboard}
-              sx={{
-                textTransform: 'none',
-                fontWeight: 'bold',
-                color: brandBlue,
-                border: `1px solid ${brandBlue}`,
-                '&:hover': {
-                  backgroundColor: brandBlue,
-                  color: '#fff',
-                },
-              }}
-            >
-              Back to Dashboard
-            </Button>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Button
+                onClick={handleInvoiceViewToggle}
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 'bold',
+                  color: brandBlue,
+                  border: `1px solid ${brandBlue}`,
+                  '&:hover': {
+                    backgroundColor: brandBlue,
+                    color: '#fff',
+                  },
+                }}
+              >
+                {invoiceView ? 'Return to Tutor Booking' : 'Invoices and Billing Details'}
+              </Button>
+
+              <Button
+                onClick={handleBackToDashboard}
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 'bold',
+                  color: brandBlue,
+                  border: `1px solid ${brandBlue}`,
+                  '&:hover': {
+                    backgroundColor: brandBlue,
+                    color: '#fff',
+                  },
+                }}
+              >
+                Back to Dashboard
+              </Button>
+            </Box>
           </Box>
 
           <Divider sx={{ marginBottom: '24px' }} />
 
+          {/* ---------- If NOT invoiceView, show the Tutors & Hours Overview ---------- */}
           <Grid container spacing={4} alignItems="stretch">
-            {/* ---------- Right Column: Hours/Billing Overview ---------- */}
-            <Grid
-              item
-              xs={12}
-              md={6}
-              order={{ xs: 1, md: 2 }}
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-              }}
-            >
-              <Box
-                sx={{
-                  border: `1px solid #ddd`,
-                  borderRadius: '8px',
-                  p: 3,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  height: '100%',
-                }}
-              >
-                <Box>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-                    Hours & Billing Overview
-                  </Typography>
-                  
-                  <Typography variant="body1" sx={{ mb: 1 }}>
-                    <strong>Lifetime Hours:</strong> {lifetimeHours}
-                  </Typography>
-                  
-                  <Typography variant="body1">
-                    <strong>Remaining Balance:</strong> {remainingBalance}
-                  </Typography>
+            {!invoiceView && (
+              <>
+                {/* Right Column: Hours/Billing Overview */}
+                <Grid
+                  item
+                  xs={12}
+                  md={6}
+                  order={{ xs: 1, md: 2 }}
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
+                  <Box
+                    sx={{
+                      border: `1px solid #ddd`,
+                      borderRadius: '8px',
+                      p: 3,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      height: '100%',
+                    }}
+                  >
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                        Hours & Billing Overview
+                      </Typography>
 
-                  {/* NEW: Parent's Remaining Hours */}
-                  <Typography variant="body1" sx={{ mt: 1 }}>
-                    <strong>Remaining Hours:</strong> {parentRemainingHours}
-                  </Typography>
+                      <Typography variant="body1" sx={{ mb: 1 }}>
+                        <strong>Lifetime Hours:</strong> {lifetimeHours}
+                      </Typography>
 
-                  {selectedStudent && (
-                    <Typography variant="body1" sx={{ mt: 1 }}>
-                      <strong>{selectedStudent.personal?.name}’s Lifetime Hours:</strong>{' '}
-                      {studentLifetimeHours !== null ? studentLifetimeHours : 'N/A'}
+                      <Typography variant="body1">
+                        <strong>Remaining Balance:</strong> {remainingBalance}
+                      </Typography>
+
+                      <Typography variant="body1" sx={{ mt: 1 }}>
+                        <strong>Remaining Hours:</strong> {parentRemainingHours}
+                      </Typography>
+
+                      {selectedStudent && (
+                        <Typography variant="body1" sx={{ mt: 1 }}>
+                          <strong>{selectedStudent.personal?.name}’s Lifetime Hours:</strong>{' '}
+                          {studentLifetimeHours !== null ? studentLifetimeHours : 'N/A'}
+                        </Typography>
+                      )}
+                    </Box>
+
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
+                        Please contact{' '}
+                        <Link href="mailto:admin@leetutoring.com" underline="hover">
+                          admin@leetutoring.com
+                        </Link>{' '}
+                        to purchase more hours if needed.
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Grid>
+
+                {/* Left Column: Tutor Cards */}
+                <Grid
+                  item
+                  xs={12}
+                  md={6}
+                  order={{ xs: 2, md: 1 }}
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
+                  {tutors.length > 0 ? (
+                    tutors.map((tutor, index) => {
+                      const tutorKey = tutor.toLowerCase();
+                      const tutorImage =
+                        tutorImages[tutorKey] ||
+                        'https://via.placeholder.com/300x200?text=Tutor+Image';
+                      const tutorInfo = tutorBookingLinks[tutor] || {};
+                      const subjectDescription = tutorSubjects[tutorKey] || 'Tutor';
+
+                      return (
+                        <Box key={index} mb={3}>
+                          <TutorCard>
+                            <CardContent>
+                              <Grid container spacing={2} alignItems="stretch">
+                                {/* Tutor Image */}
+                                <Grid item xs={12} sm={4}>
+                                  <Box
+                                    sx={{
+                                      width: '100%',
+                                      height: '100%',
+                                      borderRadius: '8px',
+                                      overflow: 'hidden',
+                                    }}
+                                  >
+                                    <Box
+                                      component="img"
+                                      src={tutorImage}
+                                      alt={tutor}
+                                      sx={{
+                                        width: '100%',
+                                        height: '100%',
+                                        objectFit: 'cover',
+                                        objectPosition: 'center',
+                                      }}
+                                    />
+                                  </Box>
+                                </Grid>
+
+                                {/* Tutor Info */}
+                                <Grid
+                                  item
+                                  xs={12}
+                                  sm={8}
+                                  display="flex"
+                                  flexDirection="column"
+                                >
+                                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+                                    {tutor}
+                                  </Typography>
+
+                                  <Typography variant="body1" sx={{ mb: 2 }}>
+                                    {subjectDescription}
+                                  </Typography>
+
+                                  {tutorInfo.individualLink ? (
+                                    <Button
+                                      variant="contained"
+                                      href={tutorInfo.individualLink}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      sx={{
+                                        alignSelf: 'flex-start',
+                                        textTransform: 'none',
+                                        fontWeight: 'bold',
+                                        backgroundColor: brandBlue,
+                                        color: '#fff',
+                                        '&:hover': {
+                                          backgroundColor: '#1c2231',
+                                        },
+                                      }}
+                                    >
+                                      Book Session
+                                    </Button>
+                                  ) : (
+                                    <Typography variant="body2" color="textSecondary">
+                                      No booking link available.
+                                    </Typography>
+                                  )}
+                                </Grid>
+                              </Grid>
+                            </CardContent>
+                          </TutorCard>
+                        </Box>
+                      );
+                    })
+                  ) : (
+                    <Typography variant="body1" color="textSecondary">
+                      No tutors available.
                     </Typography>
                   )}
-                </Box>
+                </Grid>
+              </>
+            )}
+          </Grid>
 
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
-                    Please contact{' '}
-                    <Link href="mailto:admin@leetutoring.com" underline="hover">
-                      admin@leetutoring.com
-                    </Link>{' '}
-                    to purchase more hours if needed.
-                  </Typography>
-                </Box>
-              </Box>
-            </Grid>
+          {/* ---------- If invoiceView is true, show the SCROLLER of Invoices ---------- */}
+          {invoiceView && (
+            <Box>
+              {/* Up Arrow for invoices */}
+              <Box display="flex" flexDirection="column" alignItems="center">
+                <IconButton
+                  onClick={handlePrevInvoice}
+                  disabled={startIndexInvoices === 0}
+                  sx={{ mb: 2 }}
+                >
+                  <KeyboardArrowUpIcon fontSize="large" />
+                </IconButton>
 
-            {/* ---------- Left Column: Tutor Cards ---------- */}
-            <Grid
-              item
-              xs={12}
-              md={6}
-              order={{ xs: 2, md: 1 }}
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-              }}
-            >
-              {tutors.length > 0 ? (
-                tutors.map((tutor, index) => {
-                  const tutorKey = tutor.toLowerCase();
-                  const tutorImage =
-                    tutorImages[tutorKey] ||
-                    'https://via.placeholder.com/300x200?text=Tutor+Image';
-                  const tutorInfo = tutorBookingLinks[tutor] || {};
-                  const subjectDescription = tutorSubjects[tutorKey] || 'Tutor';
-
-                  return (
-                    <Box key={index} mb={3}>
-                      <TutorCard>
-                        <CardContent>
-                          <Grid container spacing={2} alignItems="stretch">
-                            {/* Tutor Image */}
-                            <Grid item xs={12} sm={4}>
-                              <Box
-                                sx={{
-                                  width: '100%',
-                                  height: '100%',
-                                  borderRadius: '8px',
-                                  overflow: 'hidden',
-                                }}
-                              >
-                                <Box
-                                  component="img"
-                                  src={tutorImage}
-                                  alt={tutor}
-                                  sx={{
-                                    width: '100%',
-                                    height: '100%',
-                                    objectFit: 'cover',
-                                    objectPosition: 'center',
-                                  }}
-                                />
-                              </Box>
-                            </Grid>
-
-                            {/* Tutor Info */}
-                            <Grid
-                              item
-                              xs={12}
-                              sm={8}
-                              display="flex"
-                              flexDirection="column"
+                {/* DESKTOP SLIDE / MOBILE NO ANIMATION */}
+                {!isMobile ? (
+                  <Slide
+                    key={startIndexInvoices}
+                    in
+                    direction={scrollDirectionInvoices === 'down' ? 'down' : 'up'}
+                    timeout={300}
+                    mountOnEnter
+                    unmountOnExit
+                    onEnter={(node) => {
+                      const offset = '10%';
+                      node.style.transform =
+                        scrollDirectionInvoices === 'down'
+                          ? `translateY(-${offset})`
+                          : `translateY(${offset})`;
+                    }}
+                    onEntering={(node) => {
+                      node.style.transform = 'translateY(0%)';
+                    }}
+                  >
+                    <Box sx={{ maxWidth: '700px' }}>
+                      {invoicesToShow.length > 0 ? (
+                        invoicesToShow.map((inv, i) => {
+                          const isVoided = inv.isVoided ? 'VOIDED' : '';
+                          return (
+                            <Card
+                              key={i}
+                              sx={{
+                                borderRadius: '12px',
+                                boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
+                                mb: 3,
+                              }}
                             >
-                              <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-                                {tutor}
-                              </Typography>
+                              <CardContent>
+                                <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                  Invoice #{inv.docNumber} {isVoided && `(${isVoided})`}
+                                </Typography>
 
-                              <Typography variant="body1" sx={{ mb: 2 }}>
-                                {subjectDescription}
-                              </Typography>
+                                <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                  Invoice ID: {inv.invoiceID || 'N/A'}
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                  Billed To: {inv.billEmail || 'N/A'}
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                  Creation Time: {formatDateTime(inv.createdTime)}
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                  Last Updated: {formatDateTime(inv.lastUpdated)}
+                                </Typography>
 
-                              {tutorInfo.individualLink ? (
-                                <Button
-                                  variant="contained"
-                                  href={tutorInfo.individualLink}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
+                                {!inv.isVoided && (
+                                  <>
+                                    <Typography
+                                      variant="body2"
+                                      sx={{ color: '#333', mb: 0.5 }}
+                                    >
+                                      Remaining Balance on Invoice:{' '}
+                                      {inv.balance ?? 'N/A'}
+                                    </Typography>
+                                    <Typography
+                                      variant="body2"
+                                      sx={{ color: '#333', mb: 0.5 }}
+                                    >
+                                      Hours Purchased: {inv.hoursPurchased ?? 'N/A'}
+                                    </Typography>
+                                  </>
+                                )}
+
+                                {/* Payments Accordion */}
+                                <Accordion
                                   sx={{
-                                    alignSelf: 'flex-start',
-                                    textTransform: 'none',
-                                    fontWeight: 'bold',
-                                    backgroundColor: brandBlue,
-                                    color: '#fff',
-                                    '&:hover': {
-                                      backgroundColor: '#1c2231',
-                                    },
+                                    marginTop: 2,
+                                    borderRadius: '8px',
+                                    boxShadow: 'none',
+                                    border: '1px solid #ddd',
                                   }}
                                 >
-                                  Book Session
-                                </Button>
-                              ) : (
-                                <Typography variant="body2" color="textSecondary">
-                                  No booking link available.
-                                </Typography>
-                              )}
-                            </Grid>
-                          </Grid>
-                        </CardContent>
-                      </TutorCard>
+                                  <AccordionSummary
+                                    expandIcon={<ExpandMoreIcon />}
+                                    sx={{ backgroundColor: '#f7f7f7' }}
+                                  >
+                                    <Typography fontWeight="bold">View Payments</Typography>
+                                  </AccordionSummary>
+                                  <AccordionDetails>
+                                    {inv.payments && inv.payments.length > 0 ? (
+                                      inv.payments.map((pay, idx2) => (
+                                        <Box
+                                          key={idx2}
+                                          sx={{
+                                            border: '1px solid #ddd',
+                                            borderRadius: '8px',
+                                            p: 2,
+                                            mb: 2,
+                                          }}
+                                        >
+                                          <Typography variant="body2" sx={{ mb: 0.5 }}>
+                                            Payment ID: {pay.paymentID || 'N/A'}
+                                          </Typography>
+                                          <Typography variant="body2" sx={{ mb: 0.5 }}>
+                                            Received At: {formatDateTime(pay.created_at)}
+                                          </Typography>
+                                          <Typography variant="body2" sx={{ mb: 0.5 }}>
+                                            Payment to this Invoice:{' '}
+                                            {pay.payment_on_invoice || 'N/A'}
+                                          </Typography>
+                                          <Typography variant="body2" sx={{ mb: 0.5 }}>
+                                            Total Received: {pay.total_payment_amount ?? 'N/A'}
+                                          </Typography>
+                                          <Typography variant="body2">
+                                            Payment Method: {pay.paymentMethod || 'N/A'}
+                                          </Typography>
+                                        </Box>
+                                      ))
+                                    ) : (
+                                      <Typography variant="body2" color="textSecondary">
+                                        No payments recorded for this invoice.
+                                      </Typography>
+                                    )}
+                                  </AccordionDetails>
+                                </Accordion>
+                              </CardContent>
+                            </Card>
+                          );
+                        })
+                      ) : (
+                        <Typography variant="body2" color="textSecondary">
+                          No invoices found.
+                        </Typography>
+                      )}
                     </Box>
-                  );
-                })
-              ) : (
-                <Typography variant="body1" color="textSecondary">
-                  No tutors available.
-                </Typography>
-              )}
-            </Grid>
-          </Grid>
+                  </Slide>
+                ) : (
+                  /* MOBILE: no slide animation */
+                  <Box sx={{ maxWidth: '100%' }}>
+                    {invoicesToShow.length > 0 ? (
+                      invoicesToShow.map((inv, i) => {
+                        const isVoided = inv.isVoided ? 'VOIDED' : '';
+                        return (
+                          <Card
+                            key={i}
+                            sx={{
+                              borderRadius: '12px',
+                              boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
+                              mb: 3,
+                            }}
+                          >
+                            <CardContent>
+                              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                Invoice #{inv.docNumber} {isVoided && `(${isVoided})`}
+                              </Typography>
+
+                              <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                Invoice ID: {inv.invoiceID || 'N/A'}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                Billed To: {inv.billEmail || 'N/A'}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                Creation Time: {formatDateTime(inv.createdTime)}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                Last Updated: {formatDateTime(inv.lastUpdated)}
+                              </Typography>
+
+                              {!inv.isVoided && (
+                                <>
+                                  <Typography
+                                    variant="body2"
+                                    sx={{ color: '#333', mb: 0.5 }}
+                                  >
+                                    Remaining Balance on Invoice: {inv.balance ?? 'N/A'}
+                                  </Typography>
+                                  <Typography
+                                    variant="body2"
+                                    sx={{ color: '#333', mb: 0.5 }}
+                                  >
+                                    Hours Purchased: {inv.hoursPurchased ?? 'N/A'}
+                                  </Typography>
+                                </>
+                              )}
+
+                              {/* Payments Accordion */}
+                              <Accordion
+                                sx={{
+                                  marginTop: 2,
+                                  borderRadius: '8px',
+                                  boxShadow: 'none',
+                                  border: '1px solid #ddd',
+                                }}
+                              >
+                                <AccordionSummary
+                                  expandIcon={<ExpandMoreIcon />}
+                                  sx={{ backgroundColor: '#f7f7f7' }}
+                                >
+                                  <Typography fontWeight="bold">View Payments</Typography>
+                                </AccordionSummary>
+                                <AccordionDetails>
+                                  {inv.payments && inv.payments.length > 0 ? (
+                                    inv.payments.map((pay, idx2) => (
+                                      <Box
+                                        key={idx2}
+                                        sx={{
+                                          border: '1px solid #ddd',
+                                          borderRadius: '8px',
+                                          p: 2,
+                                          mb: 2,
+                                        }}
+                                      >
+                                        <Typography variant="body2" sx={{ mb: 0.5 }}>
+                                          Payment ID: {pay.paymentID || 'N/A'}
+                                        </Typography>
+                                        <Typography variant="body2" sx={{ mb: 0.5 }}>
+                                          Received At: {formatDateTime(pay.created_at)}
+                                        </Typography>
+                                        <Typography variant="body2" sx={{ mb: 0.5 }}>
+                                          Payment to this Invoice:{' '}
+                                          {pay.payment_on_invoice || 'N/A'}
+                                        </Typography>
+                                        <Typography variant="body2" sx={{ mb: 0.5 }}>
+                                          Total Received: {pay.total_payment_amount ?? 'N/A'}
+                                        </Typography>
+                                        <Typography variant="body2">
+                                          Payment Method: {pay.paymentMethod || 'N/A'}
+                                        </Typography>
+                                      </Box>
+                                    ))
+                                  ) : (
+                                    <Typography variant="body2" color="textSecondary">
+                                      No payments recorded for this invoice.
+                                    </Typography>
+                                  )}
+                                </AccordionDetails>
+                              </Accordion>
+                            </CardContent>
+                          </Card>
+                        );
+                      })
+                    ) : (
+                      <Typography variant="body2" color="textSecondary">
+                        No invoices found.
+                      </Typography>
+                    )}
+                  </Box>
+                )}
+
+                {/* Down Arrow for invoices */}
+                <IconButton
+                  onClick={handleNextInvoice}
+                  disabled={startIndexInvoices + 3 >= sortedInvoices.length}
+                  sx={{ mt: 2 }}
+                >
+                  <KeyboardArrowDownIcon fontSize="large" />
+                </IconButton>
+              </Box>
+            </Box>
+          )}
         </InfoSection>
       </Container>
     </Box>
