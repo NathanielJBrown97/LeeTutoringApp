@@ -237,6 +237,24 @@ func main() {
 		authMiddleware(http.HandlerFunc(dashboardApp.TotalHoursAndBalanceHandler)).ServeHTTP(w, r)
 	}).Methods("GET", "OPTIONS")
 
+	// api to update STUDENTS lifetime hours
+	r.HandleFunc("/api/students/{student_id}/update_student_lifetime_hours", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(dashboardApp.UpdateStudentLifetimeHoursHandler)).ServeHTTP(w, r)
+	}).Methods("POST", "OPTIONS")
+
+	// api endpoint, updates parents used hours - iteratively updates each associated students lifetiem hours
+	r.HandleFunc("/api/parent/update_used_hours", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(dashboardApp.UpdateParentUsedHoursHandler)).ServeHTTP(w, r)
+	}).Methods("POST", "OPTIONS")
+
 	// Auth status route
 	r.Handle("/api/auth/status", authMiddleware(http.HandlerFunc(authApp.StatusHandler))).Methods("GET", "OPTIONS")
 

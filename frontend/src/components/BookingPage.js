@@ -175,6 +175,67 @@ const BookingPage = () => {
       });
   }, [navigate]);
 
+  useEffect(() => {
+    if (selectedStudentID) {
+      const token = localStorage.getItem('authToken');
+      fetch(`${API_BASE_URL}/api/students/${selectedStudentID}/update_student_lifetime_hours`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error(`Failed to update student lifetime hours. Status: ${res.status}`);
+          }
+          return res.json();
+        })
+        .then((data) => {
+          // The handler returns data.lifetime_hours
+          setStudentLifetimeHours(data.lifetime_hours);
+        })
+        .catch((err) => {
+          console.error('Error updating student lifetime hours:', err);
+          setStudentLifetimeHours(null); 
+        });
+    }
+  }, [selectedStudentID]);
+  // ----- Fetch Parent Remaining Hours / Student Remaining Hours ------
+  useEffect(() => {
+    // 1) Get auth token
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      navigate('/');
+      return;
+    }
+  
+    // 2) Call the parent's update endpoint
+    fetch(`${API_BASE_URL}/api/parent/update_used_hours`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`Failed to update parent's used hours. Status: ${res.status}`);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        // 3) data.parent_remaining_hours => parent's current remaining hours
+        if (typeof data.parent_remaining_hours === 'number') {
+          setParentRemainingHours(data.parent_remaining_hours.toString());
+        } else {
+          setParentRemainingHours('N/A');
+        }
+      })
+      .catch((err) => {
+        console.error('Error fetching parent remaining hours:', err);
+        setParentRemainingHours('N/A');
+      });
+  }, [navigate]);
+  
   // ---- Fetch Associated Students & Their Data ----
   useEffect(() => {
     const token = localStorage.getItem('authToken');
@@ -211,6 +272,9 @@ const BookingPage = () => {
         setLoading(false);
       });
   }, [navigate]);
+
+  const [studentLifetimeHours, setStudentLifetimeHours] = useState(null);
+  const [parentRemainingHours, setParentRemainingHours] = useState('0');
 
   const fetchStudentsData = (studentIDs, token, queriedStudentID) => {
     const fetchPromises = studentIDs.map((studentID) =>
@@ -527,12 +591,26 @@ const BookingPage = () => {
                   <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
                     Hours & Billing Overview
                   </Typography>
+                  
                   <Typography variant="body1" sx={{ mb: 1 }}>
                     <strong>Lifetime Hours:</strong> {lifetimeHours}
                   </Typography>
+                  
                   <Typography variant="body1">
                     <strong>Remaining Balance:</strong> {remainingBalance}
                   </Typography>
+
+                  {/* NEW: Parent's Remaining Hours */}
+                  <Typography variant="body1" sx={{ mt: 1 }}>
+                    <strong>Remaining Hours:</strong> {parentRemainingHours}
+                  </Typography>
+
+                  {selectedStudent && (
+                    <Typography variant="body1" sx={{ mt: 1 }}>
+                      <strong>{selectedStudent.personal?.name}’s Lifetime Hours:</strong>{' '}
+                      {studentLifetimeHours !== null ? studentLifetimeHours : 'N/A'}
+                    </Typography>
+                  )}
                 </Box>
 
                 <Box sx={{ mt: 2 }}>
