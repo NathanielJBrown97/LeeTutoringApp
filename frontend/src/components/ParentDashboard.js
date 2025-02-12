@@ -230,6 +230,8 @@ const ParentDashboard = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm')); // phone
 
+
+  const [attemptedAutoAssociation, setAttemptedAutoAssociation] = useState(false);
   const [associatedStudents, setAssociatedStudents] = useState([]);
   const [selectedStudentID, setSelectedStudentID] = useState(null);
   const [studentData, setStudentData] = useState(null);
@@ -251,118 +253,103 @@ const ParentDashboard = () => {
 
   // -------------- Data Fetching --------------
 
-  // 1) Check for valid token & fetch parent data
-  useEffect(() => {
+   // 1) On mount, verify token, fetch parent data
+   useEffect(() => {
     const token = localStorage.getItem('authToken');
     if (!token) {
       navigate('/');
       return;
     }
+
+    // fetch parent data
     fetch(`${API_BASE_URL}/api/parent`, {
       method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { Authorization: `Bearer ${token}` },
     })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error('Failed to fetch parent data');
-        }
-        return response.json();
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Failed to fetch parent');
+        return res.json();
       })
       .then((data) => {
         setParentName(data.name || 'Parent');
         setParentPicture(data.picture || null);
       })
-      .catch((error) => {
-        console.error('Error fetching parent data:', error);
+      .catch((err) => {
+        console.error('Error fetching parent data:', err);
       });
   }, [navigate]);
 
-  /**
-   * 2) Attempt Automatic Association
-   *    Then re-fetch associated students to ensure we have updated info.
-   */
+  // 2) Attempt Automatic Association (only once)
   useEffect(() => {
     const token = localStorage.getItem('authToken');
-    if (!token) return;
+    if (!token || attemptedAutoAssociation) return;
 
     fetch(`${API_BASE_URL}/api/attemptAutomaticAssociation`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { Authorization: `Bearer ${token}` },
     })
       .then(async (res) => {
         if (!res.ok) {
           throw new Error('Auto-association attempt failed');
         }
-        const data = await res.json();
+        return res.json();
+      })
+      .then((data) => {
         console.log('Auto-association response:', data);
-        // Re-fetch to update local state
+        // E.g. some data structure that shows success or not
+        setAttemptedAutoAssociation(true);
+        // Now fetch the associated students
         fetchAssociatedStudents(token);
       })
-      .catch((err) => console.error('Auto-association error:', err));
-  }, []);
+      .catch((err) => {
+        // If the attempt fails, navigate to StudentIntake
+        console.error('Auto-association error:', err);
+        navigate('/studentintake');
+      });
+  }, [attemptedAutoAssociation, navigate]);
 
   // 3) Fetch associated students
-  useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    fetchAssociatedStudents(token);
-  }, []);
-
   const fetchAssociatedStudents = (token) => {
     fetch(`${API_BASE_URL}/api/associated-students`, {
       method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
       .then((data) => {
-        setAssociatedStudents(data.associatedStudents);
-        const params = new URLSearchParams(window.location.search);
-        const queriedStudentID = params.get('studentID');
-        if (
-          queriedStudentID &&
-          data.associatedStudents.includes(queriedStudentID)
-        ) {
-          setSelectedStudentID(queriedStudentID);
-        } else if (data.associatedStudents.length > 0) {
-          setSelectedStudentID(data.associatedStudents[0]);
+        if (!data.associatedStudents || data.associatedStudents.length === 0) {
+          // If no associated students, redirect to StudentIntake
+          console.warn('No students found, redirecting...');
+          navigate('/studentintake');
+          return;
         }
+        setAssociatedStudents(data.associatedStudents);
+        setSelectedStudentID(data.associatedStudents[0]);
       })
-      .catch((err) => console.error(err));
+      .catch((err) => {
+        console.error('fetchAssociatedStudents error:', err);
+        // Optionally also navigate to StudentIntake if error
+        navigate('/studentintake');
+      });
   };
 
-  // 4) When a student is selected, fetch their data
+  // 4) Whenever the selectedStudentID changes, fetch their data
   useEffect(() => {
-    if (selectedStudentID) {
-      const token = localStorage.getItem('authToken');
-      setLoading(true);
-      fetch(`${API_BASE_URL}/api/students/${selectedStudentID}`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+    if (!selectedStudentID) return;
+    const token = localStorage.getItem('authToken');
+
+    setLoading(true);
+    fetch(`${API_BASE_URL}/api/students/${selectedStudentID}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setStudentData(data);
+        setLoading(false);
       })
-        .then(async (res) => {
-          if (!res.ok) {
-            throw new Error('Failed to fetch student data');
-          }
-          return res.json();
-        })
-        .then((data) => {
-          setStudentData(data);
-          setLoading(false);
-          setStartIndex(0);
-          setScrollDirection('down');
-        })
-        .catch((err) => {
-          console.error(err);
-          setLoading(false);
-        });
-    }
+      .catch((err) => {
+        console.error('Error fetching student data:', err);
+        setLoading(false);
+      });
   }, [selectedStudentID]);
 
   // -------------- Handlers --------------
@@ -938,7 +925,7 @@ const ParentDashboard = () => {
                       variant="subtitle1"
                       sx={{ fontWeight: 'bold', mb: 1 }}
                     >
-                      {formattedDate}
+                      Appointment Date: {formattedDate}
                     </Typography>
                     <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
                       Homework Completed: {percentage}
