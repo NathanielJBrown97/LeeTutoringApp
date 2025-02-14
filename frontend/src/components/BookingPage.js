@@ -744,27 +744,27 @@ const BookingPage = () => {
                   >
                     <Box>
                       <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-                        Hours & Billing Overview
+                        Hours & Balance Overview
                       </Typography>
 
-                      <Typography variant="body1" sx={{ mb: 1 }}>
+                      {/* <Typography variant="body1" sx={{ mb: 1 }}>
                         <strong>Lifetime Hours:</strong> {lifetimeHours}
-                      </Typography>
+                      </Typography> */}
 
                       <Typography variant="body1">
-                        <strong>Remaining Balance:</strong> {remainingBalance}
+                        <strong>Outstanding Balance:</strong> {remainingBalance}
                       </Typography>
 
                       <Typography variant="body1" sx={{ mt: 1 }}>
                         <strong>Remaining Hours:</strong> {parentRemainingHours}
                       </Typography>
-
+{/* 
                       {selectedStudent && (
                         <Typography variant="body1" sx={{ mt: 1 }}>
                           <strong>{selectedStudent.personal?.name}’s Lifetime Hours:</strong>{' '}
                           {studentLifetimeHours !== null ? studentLifetimeHours : 'N/A'}
                         </Typography>
-                      )}
+                      )} */}
                     </Box>
 
                     <Box sx={{ mt: 2 }}>
