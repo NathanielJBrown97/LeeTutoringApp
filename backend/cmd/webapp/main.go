@@ -288,7 +288,16 @@ func main() {
 
 	// intuit webhook for keeping invoices up to date
 	r.HandleFunc("/internal/intuit/webhook", intuitOAuthSvc.HandleWebhook).Methods("POST")
-
+	// intuit daily poll endpoint (GCP Cloud Scheduler)
+	r.HandleFunc("/internal/intuit/daily-poll", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			// Handle preflight request
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		// Just call the new poll handler method you added in webhook.go
+		intuitOAuthSvc.HandleDailyPoll(w, r)
+	}).Methods("GET", "OPTIONS")
 	// OAUTH HANDLERS
 
 	// Google OAuth handlers

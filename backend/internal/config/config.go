@@ -37,6 +37,7 @@ type Config struct {
 	GOOGLE_APPLICATION_CREDENTIALS string
 	JWT_SECRET                     string
 	FIREBASE_SERVICE_ACCOUNT       string
+	INTUIT_REALM_ID                string
 }
 
 func LoadConfig() (*Config, error) {
@@ -67,6 +68,7 @@ func LoadConfig() (*Config, error) {
 		GOOGLE_CLOUD_PROJECT:           os.Getenv("GOOGLE_CLOUD_PROJECT"),
 		GOOGLE_APPLICATION_CREDENTIALS: os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"),
 		FIREBASE_SERVICE_ACCOUNT:       os.Getenv("FIREBASE_SERVICE_ACCOUNT"),
+		INTUIT_REALM_ID:                os.Getenv("INTUIT_REALM_ID"),
 	}, nil
 }
 
