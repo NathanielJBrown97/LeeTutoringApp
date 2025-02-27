@@ -277,6 +277,24 @@ func main() {
 		authMiddleware(http.HandlerFunc(dashboardApp.ParentHandler)).ServeHTTP(w, r)
 	}).Methods("GET", "OPTIONS")
 
+	r.HandleFunc("/api/updateInvoiceEmail", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		// Wrap with your auth middleware if required
+		authMiddleware(http.HandlerFunc(dashboardApp.UpdateInvoiceEmailHandler)).ServeHTTP(w, r)
+	}).Methods("POST", "OPTIONS")
+
+	r.HandleFunc("/api/getInvoiceEmail", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		// Wrap with your auth middleware if required
+		authMiddleware(http.HandlerFunc(dashboardApp.GetInvoiceEmailHandler)).ServeHTTP(w, r)
+	}).Methods("GET", "OPTIONS")
+
 	// intuit related handlers including oauth
 	r.HandleFunc("/internal/intuit/oauth", func(w http.ResponseWriter, r *http.Request) {
 		intuitOAuthSvc.HandleAuthRedirect(w, r)

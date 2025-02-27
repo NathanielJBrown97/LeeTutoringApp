@@ -50,6 +50,7 @@ import {
   useMediaQuery,
   useTheme,
   Chip,
+  TextField,
 } from '@mui/material';
 import { styled } from '@mui/system';
 import { Collapse } from '@mui/material';
@@ -61,6 +62,9 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+
+// Charts
+import SuperScoreChart from './SuperScoreChart';
 
 // -------------------- Brand Colors --------------------
 const brandBlue = '#0e1027';
@@ -245,68 +249,80 @@ const ParentDashboard = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // Parent Profile Editing
+  const [editMode, setEditMode] = useState(false);
+  const [invoiceEmailValue, setInvoiceEmailValue] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [confirmationMode, setConfirmationMode] = useState(false);
+
   // For the 3-appointment scroller
   const [startIndex, setStartIndex] = useState(0);
   const [scrollDirection, setScrollDirection] = useState('down');
 
   const navigate = useNavigate();
 
+  const [parentID, setParentID] = useState("");
+  const [parentInvoiceEmail, setParentInvoiceEmail] = useState("");
+
+
   // -------------- Data Fetching --------------
 
-   // 1) On mount, verify token, fetch parent data
-   useEffect(() => {
-    const token = localStorage.getItem('authToken');
+  // Fetch parent data on mount
+  useEffect(() => {
+    const token = localStorage.getItem("authToken");
     if (!token) {
-      navigate('/');
+      navigate("/");
       return;
     }
 
-    // fetch parent data
     fetch(`${API_BASE_URL}/api/parent`, {
-      method: 'GET',
+      method: "GET",
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(async (res) => {
-        if (!res.ok) throw new Error('Failed to fetch parent');
+        if (!res.ok) throw new Error("Failed to fetch parent");
         return res.json();
       })
       .then((data) => {
-        setParentName(data.name || 'Parent');
+        setParentID(data.user_id); // Save the parent's document ID
+        setParentName(data.name || "Parent");
         setParentPicture(data.picture || null);
+        setParentInvoiceEmail(data.invoice_email || ""); // Store the invoice email
       })
       .catch((err) => {
-        console.error('Error fetching parent data:', err);
+        console.error("Error fetching parent data:", err);
       });
   }, [navigate]);
 
-  // 2) Attempt Automatic Association (only once)
-  useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    if (!token || attemptedAutoAssociation) return;
 
-    fetch(`${API_BASE_URL}/api/attemptAutomaticAssociation`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          throw new Error('Auto-association attempt failed');
-        }
-        return res.json();
+    // 2) Attempt Automatic Association (only once)
+    useEffect(() => {
+      const token = localStorage.getItem('authToken');
+      if (!token || attemptedAutoAssociation) return;
+
+      fetch(`${API_BASE_URL}/api/attemptAutomaticAssociation`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
       })
-      .then((data) => {
-        console.log('Auto-association response:', data);
-        // E.g. some data structure that shows success or not
-        setAttemptedAutoAssociation(true);
-        // Now fetch the associated students
-        fetchAssociatedStudents(token);
-      })
-      .catch((err) => {
-        // If the attempt fails, navigate to StudentIntake
-        console.error('Auto-association error:', err);
-        navigate('/studentintake');
-      });
-  }, [attemptedAutoAssociation, navigate]);
+        .then(async (res) => {
+          if (!res.ok) {
+            throw new Error('Auto-association attempt failed');
+          }
+          return res.json();
+        })
+        .then((data) => {
+          console.log('Auto-association response:', data);
+          // E.g. some data structure that shows success or not
+          setAttemptedAutoAssociation(true);
+          // Now fetch the associated students
+          fetchAssociatedStudents(token);
+        })
+        .catch((err) => {
+          // If the attempt fails, navigate to StudentIntake
+          console.error('Auto-association error:', err);
+          navigate('/studentintake');
+        });
+    }, [attemptedAutoAssociation, navigate]);
 
   // 3) Fetch associated students
   const fetchAssociatedStudents = (token) => {
@@ -353,6 +369,103 @@ const ParentDashboard = () => {
   }, [selectedStudentID]);
 
   // -------------- Handlers --------------
+
+  // For parent profile editing
+
+  // Email validation helper
+  const isValidEmail = (email) => {
+    // Simple regex for basic email validation
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  // Handler for clicking the "Edit" button
+  const handleEditClick = () => {
+    setEditMode(true);
+    setInvoiceEmailValue(studentData?.parent?.invoice_email || '');
+    setEmailError('');
+    setConfirmationMode(false);
+  };
+
+  // Update input value as user types
+  const handleInputChange = (e) => {
+    setInvoiceEmailValue(e.target.value);
+  };
+
+  // Handler for "Change" button click
+  const handleSaveClick = () => {
+    if (!isValidEmail(invoiceEmailValue)) {
+      setEmailError('Please enter a valid email address.');
+      return;
+    }
+    setEmailError('');
+    // Instead of immediately saving, show the confirmation check.
+    setConfirmationMode(true);
+  };
+
+  // Handler for when the user confirms the change
+  const handleConfirmSave = () => {
+    const token = localStorage.getItem("authToken");
+    if (!parentID) {
+      console.error("Parent ID is missing");
+      return;
+    }
+    fetch(`${API_BASE_URL}/api/updateInvoiceEmail`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        parent_id: parentID, // Use the parent's ID we stored
+        invoice_email: invoiceEmailValue,
+      }),
+    })
+      .then((res) => {
+        console.log("Response status:", res.status);
+        return res.json();
+      })
+      .then((data) => {
+        console.log("Invoice email updated:", data);
+        // Optionally update your studentData if it contains a parent subdoc
+        setStudentData((prev) => ({
+          ...prev,
+          parent: {
+            ...prev.parent,
+            invoice_email: invoiceEmailValue,
+          },
+        }));
+        setParentInvoiceEmail(invoiceEmailValue);
+        setConfirmationMode(false);
+        setEditMode(false);
+      })
+      .catch((error) => {
+        console.error("Error updating invoice email:", error);
+      });
+  };
+  
+  
+
+  // Handler for the "Go Back" button in the confirmation view.
+  const handleCancelConfirmation = () => {
+    // Return to the edit view so the user can make corrections.
+    setConfirmationMode(false);
+  };
+
+    if (loading || !studentData) {
+      return (
+        <Box
+          display="flex"
+          justifyContent="center"
+          alignItems="center"
+          height="100vh"
+          sx={{ backgroundColor: lightBackground }}
+        >
+          <CircularProgress />
+        </Box>
+      );
+    }
+
+
   const handleSignOut = () => {
     localStorage.removeItem('authToken');
     authState.updateToken(null);
@@ -1180,97 +1293,130 @@ const ParentDashboard = () => {
           {/* ============== Student Profile ============== */}
           <TabPanel value={activeTab} index={2}>
             <SectionContainer>
-              <SectionTitle variant="h6">Student Profile</SectionTitle>
-              <Divider sx={{ marginBottom: '16px' }} />
-              <TableContainer>
-                <Table>
-                  <TableBody>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
-                      <TableCell>{studentData.personal?.name || 'N/A'}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 600 }}>Grade</TableCell>
-                      <TableCell>{studentData.personal?.grade || 'N/A'}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 600 }}>High School</TableCell>
-                      <TableCell>
-                        {studentData.personal?.high_school || 'N/A'}
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 600 }}>
-                        Accommodations
-                      </TableCell>
-                      <TableCell>
-                        {studentData.personal?.accommodations || 'N/A'}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </SectionContainer>
-          </TabPanel>
+            <SectionTitle variant="h6">Parent Profile</SectionTitle>
+            <Divider sx={{ marginBottom: '16px' }} />
+            {/* Bolded question prompt */}
+            <Typography variant="body1" sx={{ fontWeight: 'bold', mb: 1 }}>
+              Where should our invoices be emailed?
+            </Typography>
+            {/* Display current email when not editing or confirming */}
+            {!editMode && (
+              <Grid container alignItems="center" spacing={2}>
+                <Grid item xs={8}>
+                  <Typography>
+                    {parentInvoiceEmail || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={4}>
+                  <Button variant="outlined" onClick={handleEditClick}>
+                    Edit
+                  </Button>
+                </Grid>
+              </Grid>
+            )}
+            {/* Edit mode view: show input field */}
+            {editMode && !confirmationMode && (
+              <Grid container alignItems="center" spacing={2} sx={{ marginTop: 2 }}>
+                <Grid item xs={8}>
+                  <TextField
+                    fullWidth
+                    variant="outlined"
+                    value={invoiceEmailValue}
+                    onChange={handleInputChange}
+                    error={!!emailError}
+                    helperText={emailError}
+                  />
+                </Grid>
+                <Grid item xs={4}>
+                  <Button variant="contained" onClick={handleSaveClick}>
+                    Change
+                  </Button>
+                </Grid>
+              </Grid>
+            )}
+            {/* Confirmation view */}
+            {confirmationMode && (
+              <Grid container direction="column" spacing={2} sx={{ marginTop: 2 }}>
+                <Grid item>
+                  <Typography variant="body1">
+                    Please confirm that you want to update the invoice email to:{" "}
+                    <strong>{invoiceEmailValue}</strong>
+                  </Typography>
+                </Grid>
+                <Grid item container spacing={2}>
+                  <Grid item>
+                    <Button variant="contained" onClick={handleConfirmSave}>
+                      Confirm
+                    </Button>
+                  </Grid>
+                  <Grid item>
+                    <Button variant="outlined" onClick={handleCancelConfirmation}>
+                      Go Back
+                    </Button>
+                  </Grid>
+                </Grid>
+              </Grid>
+            )}
+          </SectionContainer>
 
-          {/* ========================= Test Data (Tab #3) ========================= */}
+
+
+
+  {/* Existing Student Profile Section */}
+  <SectionContainer>
+    <SectionTitle variant="h6">Student Profile</SectionTitle>
+    <Divider sx={{ marginBottom: '16px' }} />
+    <TableContainer>
+      <Table>
+        <TableBody>
+          <TableRow>
+            <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
+            <TableCell>{studentData.personal?.name || 'N/A'}</TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell sx={{ fontWeight: 600 }}>Grade</TableCell>
+            <TableCell>{studentData.personal?.grade || 'N/A'}</TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell sx={{ fontWeight: 600 }}>High School</TableCell>
+            <TableCell>
+              {studentData.personal?.high_school || 'N/A'}
+            </TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell sx={{ fontWeight: 600 }}>
+              Accommodations
+            </TableCell>
+            <TableCell>
+              {studentData.personal?.accommodations || 'N/A'}
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    </TableContainer>
+  </SectionContainer>
+</TabPanel>
+
+
+ {/* ============== TEST DATA  ============== */}
           <TabPanel value={activeTab} index={3}>
             <Grid container spacing={4} direction={isMobile ? 'column' : 'row'}>
               {/* MAIN SECTION (Left/Top) */}
               <Grid item xs={12} md={10} order={{ xs: 1, md: 2 }}>
                 <SectionContainer>
+                  {/* NEW SUPER SCORE CHART REPLACING THE OLD CHART */}
+                  <SuperScoreChart 
+                    testData={testData} 
+                    filter={testFocus === 'ACT' ? 'ACT' : 'SAT'} 
+                  />
+
+                  {/* SAT/PSAT Data Tables & Cards */}
                   {(testFocus === 'SAT' || testFocus === 'PSAT' || testFocus === 'TBD') && (
                     <>
                       <Typography variant="h6" sx={{ fontWeight: 600, mt: 2 }}>
-                        SAT Scores {testFocus === 'PSAT' && '(PSAT Student)'}
+                        SAT Test Results {testFocus === 'PSAT' && '(PSAT Student)'}
                       </Typography>
-                      {lineDataSAT.length > 0 ? (
-                        <Box sx={{ mt: 2, height: 300, width: '100%' }}>
-                          <ResponsiveContainer width="100%" height="100%">
-                            <LineChart
-                              data={lineDataSAT}
-                              margin={{ top: 20, right: 20, left: 20, bottom: 20 }}
-                            >
-                              <CartesianGrid stroke="#ccc" strokeDasharray="5 5" />
-                              <XAxis dataKey="name" />
-                              <YAxis
-                                domain={[
-                                  (dataMin) => Math.max(0, dataMin - 2),
-                                  (dataMax) => dataMax + 2,
-                                ]}
-                                allowDecimals={false}
-                              />
-                              <Tooltip />
-                              <Legend />
-                              <Line
-                                type="monotone"
-                                dataKey="EBRW"
-                                stroke={brandGold}
-                                strokeWidth={2}
-                              />
-                              <Line
-                                type="monotone"
-                                dataKey="Math"
-                                stroke={brandGoldLight}
-                                strokeWidth={2}
-                              />
-                              <Line
-                                type="monotone"
-                                dataKey="Total"
-                                stroke={brandBlue}
-                                strokeWidth={3}
-                                dot
-                              />
-                            </LineChart>
-                          </ResponsiveContainer>
-                        </Box>
-                      ) : (
-                        <Typography variant="body2" sx={{ mt: 2 }} color="textSecondary">
-                          No SAT data to graph.
-                        </Typography>
-                      )}
-
-                      {/* ============ DESKTOP TABLE FOR SAT ============ */}
+                      {/* Remove old chart – only tables/cards remain */}
                       {!isMobile ? (
                         <Box sx={{ mt: 4 }}>
                           <TableContainer>
@@ -1278,9 +1424,7 @@ const ParentDashboard = () => {
                               <TableHead>
                                 <TableRow>
                                   <TableCell sx={{ fontWeight: 'bold' }}>Date</TableCell>
-                                  <TableCell sx={{ fontWeight: 'bold' }}>
-                                    Test (Type)
-                                  </TableCell>
+                                  <TableCell sx={{ fontWeight: 'bold' }}>Test (Type)</TableCell>
                                   <TableCell sx={{ fontWeight: 'bold' }}>EBRW</TableCell>
                                   <TableCell sx={{ fontWeight: 'bold' }}>Math</TableCell>
                                   <TableCell sx={{ fontWeight: 'bold' }}>Total</TableCell>
@@ -1288,20 +1432,12 @@ const ParentDashboard = () => {
                               </TableHead>
                               <TableBody>
                                 {[...satTests]
-                                  .sort(
-                                    (a, b) =>
-                                      new Date(b.date || 0) - new Date(a.date || 0)
-                                  )
+                                  .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
                                   .map((testDoc, index, arr) => {
-                                    const { EBRW, Math, SAT_Total } = renderSATScores(
-                                      testDoc
-                                    );
+                                    const { EBRW, Math, SAT_Total } = renderSATScores(testDoc);
                                     const prevDoc = arr[index + 1];
                                     const dateStr = testDoc.date || 'N/A';
-                                    const label = `${testDoc.test || 'N/A'} (${
-                                      testDoc.type || 'N/A'
-                                    })`;
-
+                                    const label = `${testDoc.test || 'N/A'} (${testDoc.type || 'N/A'})`;
                                     return (
                                       <React.Fragment key={index}>
                                         <TableRow>
@@ -1311,42 +1447,35 @@ const ParentDashboard = () => {
                                           <TableCell>{Math}</TableCell>
                                           <TableCell>{SAT_Total}</TableCell>
                                         </TableRow>
-
                                         <TableRow>
                                           <TableCell colSpan={2} sx={{ fontWeight: 600 }}>
                                             {prevDoc ? 'Score Change' : 'Baseline'}
                                           </TableCell>
                                           <TableCell>
-                                            {prevDoc
-                                              ? renderChangeChip(
-                                                  parseScore(prevDoc.SAT_Scores?.[0]),
-                                                  parseScore(EBRW)
-                                                )
-                                              : '—'}
+                                            {prevDoc ? 
+                                              renderChangeChip(
+                                                parseScore(prevDoc.SAT_Scores?.[0]),
+                                                parseScore(EBRW)
+                                              ) : '—'}
                                           </TableCell>
                                           <TableCell>
-                                            {prevDoc
-                                              ? renderChangeChip(
-                                                  parseScore(prevDoc.SAT_Scores?.[1]),
-                                                  parseScore(Math)
-                                                )
-                                              : '—'}
+                                            {prevDoc ? 
+                                              renderChangeChip(
+                                                parseScore(prevDoc.SAT_Scores?.[1]),
+                                                parseScore(Math)
+                                              ) : '—'}
                                           </TableCell>
                                           <TableCell>
-                                            {prevDoc
-                                              ? renderChangeChip(
-                                                  parseScore(prevDoc.SAT_Scores?.[4]),
-                                                  parseScore(SAT_Total)
-                                                )
-                                              : '—'}
+                                            {prevDoc ? 
+                                              renderChangeChip(
+                                                parseScore(prevDoc.SAT_Scores?.[4]),
+                                                parseScore(SAT_Total)
+                                              ) : '—'}
                                           </TableCell>
                                         </TableRow>
-
                                         <TableRow>
                                           <TableCell colSpan={5} sx={{ px: 0 }}>
-                                            <Divider
-                                              sx={{ my: 2, borderColor: 'black', borderWidth: 2 }}
-                                            />
+                                            <Divider sx={{ my: 2, borderColor: 'black', borderWidth: 2 }} />
                                           </TableCell>
                                         </TableRow>
                                       </React.Fragment>
@@ -1357,20 +1486,14 @@ const ParentDashboard = () => {
                           </TableContainer>
                         </Box>
                       ) : (
-                        /* ============ MOBILE CARDS FOR SAT ============ */
                         <Box sx={{ mt: 4 }}>
                           {[...satTests]
-                            .sort(
-                              (a, b) => new Date(b.date || 0) - new Date(a.date || 0)
-                            )
+                            .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
                             .map((testDoc, index, arr) => {
                               const { EBRW, Math, SAT_Total } = renderSATScores(testDoc);
                               const prevDoc = arr[index + 1];
                               const dateStr = testDoc.date || 'N/A';
-                              const label = `${testDoc.test || 'N/A'} (${
-                                testDoc.type || 'N/A'
-                              })`;
-
+                              const label = `${testDoc.test || 'N/A'} (${testDoc.type || 'N/A'})`;
                               return (
                                 <Paper
                                   key={index}
@@ -1381,14 +1504,9 @@ const ParentDashboard = () => {
                                     boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
                                   }}
                                 >
-                                  <Typography
-                                    variant="subtitle1"
-                                    sx={{ fontWeight: 'bold', mb: 1 }}
-                                  >
+                                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
                                     {dateStr} — {label}
                                   </Typography>
-
-                                  {/* Row 1: EBRW, Math, Total */}
                                   <Box
                                     sx={{
                                       display: 'flex',
@@ -1416,14 +1534,9 @@ const ParentDashboard = () => {
                                       <Typography variant="body2">{SAT_Total}</Typography>
                                     </Box>
                                   </Box>
-
-                                  {/* Row 2: Score Change Chips */}
                                   {prevDoc ? (
                                     <Box sx={{ mt: 2 }}>
-                                      <Typography
-                                        variant="body2"
-                                        sx={{ mb: 0.5, fontWeight: 'bold' }}
-                                      >
+                                      <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 'bold' }}>
                                         Score Change:
                                       </Typography>
                                       <Box
@@ -1485,67 +1598,9 @@ const ParentDashboard = () => {
                   {(testFocus === 'ACT' || testFocus === 'TBD') && (
                     <>
                       <Typography variant="h6" sx={{ fontWeight: 600, mt: 4 }}>
-                        ACT Scores
+                        ACT Test Results
                       </Typography>
-                      {lineDataACT.length > 0 ? (
-                        <Box sx={{ mt: 2, height: 300, width: '100%' }}>
-                          <ResponsiveContainer width="100%" height="100%">
-                            <LineChart
-                              data={lineDataACT}
-                              margin={{ top: 20, right: 20, left: 20, bottom: 20 }}
-                            >
-                              <CartesianGrid stroke="#ccc" strokeDasharray="5 5" />
-                              <XAxis dataKey="name" />
-                              <YAxis
-                                domain={[
-                                  (dataMin) => Math.max(0, dataMin - 2),
-                                  (dataMax) => dataMax + 2,
-                                ]}
-                                allowDecimals={false}
-                              />
-                              <Tooltip />
-                              <Legend />
-                              <Line
-                                type="monotone"
-                                dataKey="English"
-                                stroke={brandGold}
-                                strokeWidth={2}
-                              />
-                              <Line
-                                type="monotone"
-                                dataKey="Math"
-                                stroke={brandGoldLight}
-                                strokeWidth={2}
-                              />
-                              <Line
-                                type="monotone"
-                                dataKey="Reading"
-                                stroke={brandGoldLighter}
-                                strokeWidth={2}
-                              />
-                              <Line
-                                type="monotone"
-                                dataKey="Science"
-                                stroke={brandBlueLight}
-                                strokeWidth={2}
-                              />
-                              <Line
-                                type="monotone"
-                                dataKey="Total"
-                                stroke={brandBlue}
-                                strokeWidth={3}
-                                dot
-                              />
-                            </LineChart>
-                          </ResponsiveContainer>
-                        </Box>
-                      ) : (
-                        <Typography variant="body2" sx={{ mt: 2 }} color="textSecondary">
-                          No ACT data to graph.
-                        </Typography>
-                      )}
-
-                      {/* ============ DESKTOP TABLE FOR ACT ============ */}
+                      {/* Remove the old ACT chart; only display tables/cards */}
                       {!isMobile ? (
                         <Box sx={{ mt: 4 }}>
                           <TableContainer>
@@ -1553,9 +1608,7 @@ const ParentDashboard = () => {
                               <TableHead>
                                 <TableRow>
                                   <TableCell sx={{ fontWeight: 'bold' }}>Date</TableCell>
-                                  <TableCell sx={{ fontWeight: 'bold' }}>
-                                    Test (Type)
-                                  </TableCell>
+                                  <TableCell sx={{ fontWeight: 'bold' }}>Test (Type)</TableCell>
                                   <TableCell sx={{ fontWeight: 'bold' }}>English</TableCell>
                                   <TableCell sx={{ fontWeight: 'bold' }}>Math</TableCell>
                                   <TableCell sx={{ fontWeight: 'bold' }}>Reading</TableCell>
@@ -1565,24 +1618,12 @@ const ParentDashboard = () => {
                               </TableHead>
                               <TableBody>
                                 {[...actTests]
-                                  .sort(
-                                    (a, b) =>
-                                      new Date(b.date || 0) - new Date(a.date || 0)
-                                  )
+                                  .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
                                   .map((testDoc, index, arr) => {
-                                    const {
-                                      English,
-                                      MathVal,
-                                      Reading,
-                                      Science,
-                                      ACT_Total,
-                                    } = renderACTScores(testDoc);
+                                    const { English, MathVal, Reading, Science, ACT_Total } = renderACTScores(testDoc);
                                     const prevDoc = arr[index + 1];
                                     const dateStr = testDoc.date || 'N/A';
-                                    const label = `${testDoc.test || 'N/A'} (${
-                                      testDoc.type || 'N/A'
-                                    })`;
-
+                                    const label = `${testDoc.test || 'N/A'} (${testDoc.type || 'N/A'})`;
                                     return (
                                       <React.Fragment key={index}>
                                         <TableRow>
@@ -1594,62 +1635,49 @@ const ParentDashboard = () => {
                                           <TableCell>{Science}</TableCell>
                                           <TableCell>{ACT_Total}</TableCell>
                                         </TableRow>
-
                                         <TableRow>
                                           <TableCell colSpan={2} sx={{ fontWeight: 600 }}>
                                             {prevDoc ? 'Score Change' : 'Baseline'}
                                           </TableCell>
                                           <TableCell>
-                                            {prevDoc
-                                              ? renderChangeChip(
-                                                  parseScore(prevDoc.ACT_Scores?.[0]),
-                                                  parseScore(English)
-                                                )
-                                              : '—'}
+                                            {prevDoc ? 
+                                              renderChangeChip(
+                                                parseScore(prevDoc.ACT_Scores?.[0]),
+                                                parseScore(English)
+                                              ) : '—'}
                                           </TableCell>
                                           <TableCell>
-                                            {prevDoc
-                                              ? renderChangeChip(
-                                                  parseScore(prevDoc.ACT_Scores?.[1]),
-                                                  parseScore(MathVal)
-                                                )
-                                              : '—'}
+                                            {prevDoc ? 
+                                              renderChangeChip(
+                                                parseScore(prevDoc.ACT_Scores?.[1]),
+                                                parseScore(MathVal)
+                                              ) : '—'}
                                           </TableCell>
                                           <TableCell>
-                                            {prevDoc
-                                              ? renderChangeChip(
-                                                  parseScore(prevDoc.ACT_Scores?.[2]),
-                                                  parseScore(Reading)
-                                                )
-                                              : '—'}
+                                            {prevDoc ? 
+                                              renderChangeChip(
+                                                parseScore(prevDoc.ACT_Scores?.[2]),
+                                                parseScore(Reading)
+                                              ) : '—'}
                                           </TableCell>
                                           <TableCell>
-                                            {prevDoc
-                                              ? renderChangeChip(
-                                                  parseScore(prevDoc.ACT_Scores?.[3]),
-                                                  parseScore(Science)
-                                                )
-                                              : '—'}
+                                            {prevDoc ? 
+                                              renderChangeChip(
+                                                parseScore(prevDoc.ACT_Scores?.[3]),
+                                                parseScore(Science)
+                                              ) : '—'}
                                           </TableCell>
                                           <TableCell>
-                                            {prevDoc
-                                              ? renderChangeChip(
-                                                  parseScore(prevDoc.ACT_Scores?.[4]),
-                                                  parseScore(ACT_Total)
-                                                )
-                                              : '—'}
+                                            {prevDoc ? 
+                                              renderChangeChip(
+                                                parseScore(prevDoc.ACT_Scores?.[4]),
+                                                parseScore(ACT_Total)
+                                              ) : '—'}
                                           </TableCell>
                                         </TableRow>
-
                                         <TableRow>
                                           <TableCell colSpan={7} sx={{ px: 0 }}>
-                                            <Divider
-                                              sx={{
-                                                my: 2,
-                                                borderColor: 'black',
-                                                borderWidth: 2,
-                                              }}
-                                            />
+                                            <Divider sx={{ my: 2, borderColor: 'black', borderWidth: 2 }} />
                                           </TableCell>
                                         </TableRow>
                                       </React.Fragment>
@@ -1660,26 +1688,14 @@ const ParentDashboard = () => {
                           </TableContainer>
                         </Box>
                       ) : (
-                        /* ============ MOBILE CARDS FOR ACT ============ */
                         <Box sx={{ mt: 4 }}>
                           {[...actTests]
-                            .sort(
-                              (a, b) => new Date(b.date || 0) - new Date(a.date || 0)
-                            )
+                            .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
                             .map((testDoc, index, arr) => {
-                              const {
-                                English,
-                                MathVal,
-                                Reading,
-                                Science,
-                                ACT_Total,
-                              } = renderACTScores(testDoc);
+                              const { English, MathVal, Reading, Science, ACT_Total } = renderACTScores(testDoc);
                               const prevDoc = arr[index + 1];
                               const dateStr = testDoc.date || 'N/A';
-                              const label = `${testDoc.test || 'N/A'} (${
-                                testDoc.type || 'N/A'
-                              })`;
-
+                              const label = `${testDoc.test || 'N/A'} (${testDoc.type || 'N/A'})`;
                               return (
                                 <Paper
                                   key={index}
@@ -1690,14 +1706,9 @@ const ParentDashboard = () => {
                                     boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
                                   }}
                                 >
-                                  <Typography
-                                    variant="subtitle1"
-                                    sx={{ fontWeight: 'bold', mb: 1 }}
-                                  >
+                                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
                                     {dateStr} — {label}
                                   </Typography>
-
-                                  {/* Row 1: English, Math, Reading */}
                                   <Box
                                     sx={{
                                       display: 'flex',
@@ -1725,14 +1736,9 @@ const ParentDashboard = () => {
                                       <Typography variant="body2">{Reading}</Typography>
                                     </Box>
                                   </Box>
-
-                                  {/* Row 2: English/Math/Reading Chips */}
                                   {prevDoc ? (
                                     <Box sx={{ mt: 2 }}>
-                                      <Typography
-                                        variant="body2"
-                                        sx={{ mb: 0.5, fontWeight: 'bold' }}
-                                      >
+                                      <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 'bold' }}>
                                         Score Change:
                                       </Typography>
                                       <Box
@@ -1783,11 +1789,7 @@ const ParentDashboard = () => {
                                       Baseline
                                     </Typography>
                                   )}
-
-                                  {/* Divider between sets of ACT scores */}
                                   <Divider sx={{ my: 2 }} />
-
-                                  {/* Row 3: Science, Total */}
                                   <Box
                                     sx={{
                                       display: 'flex',
@@ -1809,14 +1811,9 @@ const ParentDashboard = () => {
                                       <Typography variant="body2">{ACT_Total}</Typography>
                                     </Box>
                                   </Box>
-
-                                  {/* Row 4: Science/Total Chips */}
                                   {prevDoc ? (
                                     <Box sx={{ mt: 2 }}>
-                                      <Typography
-                                        variant="body2"
-                                        sx={{ mb: 0.5, fontWeight: 'bold' }}
-                                      >
+                                      <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 'bold' }}>
                                         Score Change:
                                       </Typography>
                                       <Box
@@ -1902,7 +1899,6 @@ const ParentDashboard = () => {
                         </Typography>
                       );
                     } else {
-                      // SAT or PSAT
                       const relevant = testDates.filter((td) => {
                         const t = (td.test_type || '').toUpperCase();
                         return t.includes('SAT') || t.includes('PSAT');
@@ -1928,6 +1924,8 @@ const ParentDashboard = () => {
               </Grid>
             </Grid>
           </TabPanel>
+
+
         </ContentWrapper>
       </Container>
     </RootContainer>
