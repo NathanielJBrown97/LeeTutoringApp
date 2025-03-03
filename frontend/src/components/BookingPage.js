@@ -331,8 +331,6 @@ const BookingPage = () => {
   // ---- Fetch Associated Students & Their Data ----
   const [loadingState, setLoadingState] = useState(false);
 
-
-
   useEffect(() => {
     const token = localStorage.getItem('authToken');
 
@@ -747,10 +745,6 @@ const BookingPage = () => {
                         Hours & Balance Overview
                       </Typography>
 
-                      {/* <Typography variant="body1" sx={{ mb: 1 }}>
-                        <strong>Lifetime Hours:</strong> {lifetimeHours}
-                      </Typography> */}
-
                       <Typography variant="body1">
                         <strong>Outstanding Balance:</strong> {remainingBalance}
                       </Typography>
@@ -758,13 +752,6 @@ const BookingPage = () => {
                       <Typography variant="body1" sx={{ mt: 1 }}>
                         <strong>Remaining Hours:</strong> {parentRemainingHours}
                       </Typography>
-{/* 
-                      {selectedStudent && (
-                        <Typography variant="body1" sx={{ mt: 1 }}>
-                          <strong>{selectedStudent.personal?.name}’s Lifetime Hours:</strong>{' '}
-                          {studentLifetimeHours !== null ? studentLifetimeHours : 'N/A'}
-                        </Typography>
-                      )} */}
                     </Box>
 
                     <Box sx={{ mt: 2 }}>
@@ -935,37 +922,25 @@ const BookingPage = () => {
                                 <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
                                   Invoice #{inv.docNumber} {isVoided && `(${isVoided})`}
                                 </Typography>
-
                                 <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
-                                  Invoice ID: {inv.invoiceID || 'N/A'}
+                                  <strong>Invoice ID:</strong> {inv.invoiceID || 'N/A'}
                                 </Typography>
-                                <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
-                                  Billed To: {inv.billEmail || 'N/A'}
-                                </Typography>
-                                <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
-                                  Creation Time: {formatDateTime(inv.createdTime)}
-                                </Typography>
-                                <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
-                                  Last Updated: {formatDateTime(inv.lastUpdated)}
-                                </Typography>
-
                                 {!inv.isVoided && (
-                                  <>
-                                    <Typography
-                                      variant="body2"
-                                      sx={{ color: '#333', mb: 0.5 }}
-                                    >
-                                      Remaining Balance on Invoice:{' '}
-                                      {inv.balance ?? 'N/A'}
-                                    </Typography>
-                                    <Typography
-                                      variant="body2"
-                                      sx={{ color: '#333', mb: 0.5 }}
-                                    >
-                                      Hours Purchased: {inv.hoursPurchased ?? 'N/A'}
-                                    </Typography>
-                                  </>
+                                  <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                    <strong>Hours Purchased:</strong> {inv.hoursPurchased ?? 'N/A'}
+                                  </Typography>
                                 )}
+                                {!inv.isVoided && (
+                                  <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                    <strong>Remaining Balance on Invoice:</strong> {inv.balance ?? 'N/A'}
+                                  </Typography>
+                                )}
+                                <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                  <strong>Billed To:</strong> {inv.billEmail || 'N/A'}
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                  <strong>Last Updated:</strong> {formatDateTime(inv.lastUpdated)}
+                                </Typography>
 
                                 {/* Payments Accordion */}
                                 <Accordion
@@ -1001,8 +976,7 @@ const BookingPage = () => {
                                             Received At: {formatDateTime(pay.created_at)}
                                           </Typography>
                                           <Typography variant="body2" sx={{ mb: 0.5 }}>
-                                            Payment to this Invoice:{' '}
-                                            {pay.payment_on_invoice || 'N/A'}
+                                            Payment to this Invoice: {pay.payment_on_invoice || 'N/A'}
                                           </Typography>
                                           <Typography variant="body2" sx={{ mb: 0.5 }}>
                                             Total Received: {pay.total_payment_amount ?? 'N/A'}
@@ -1049,36 +1023,25 @@ const BookingPage = () => {
                               <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
                                 Invoice #{inv.docNumber} {isVoided && `(${isVoided})`}
                               </Typography>
-
                               <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
-                                Invoice ID: {inv.invoiceID || 'N/A'}
+                                <strong>Invoice ID:</strong> {inv.invoiceID || 'N/A'}
                               </Typography>
-                              <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
-                                Billed To: {inv.billEmail || 'N/A'}
-                              </Typography>
-                              <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
-                                Creation Time: {formatDateTime(inv.createdTime)}
-                              </Typography>
-                              <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
-                                Last Updated: {formatDateTime(inv.lastUpdated)}
-                              </Typography>
-
                               {!inv.isVoided && (
-                                <>
-                                  <Typography
-                                    variant="body2"
-                                    sx={{ color: '#333', mb: 0.5 }}
-                                  >
-                                    Remaining Balance on Invoice: {inv.balance ?? 'N/A'}
-                                  </Typography>
-                                  <Typography
-                                    variant="body2"
-                                    sx={{ color: '#333', mb: 0.5 }}
-                                  >
-                                    Hours Purchased: {inv.hoursPurchased ?? 'N/A'}
-                                  </Typography>
-                                </>
+                                <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                  <strong>Hours Purchased:</strong> {inv.hoursPurchased ?? 'N/A'}
+                                </Typography>
                               )}
+                              {!inv.isVoided && (
+                                <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                  <strong>Remaining Balance on Invoice:</strong> {inv.balance ?? 'N/A'}
+                                </Typography>
+                              )}
+                              <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                <strong>Billed To:</strong> {inv.billEmail || 'N/A'}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#333', mb: 0.5 }}>
+                                <strong>Last Updated:</strong> {formatDateTime(inv.lastUpdated)}
+                              </Typography>
 
                               {/* Payments Accordion */}
                               <Accordion
@@ -1114,8 +1077,7 @@ const BookingPage = () => {
                                           Received At: {formatDateTime(pay.created_at)}
                                         </Typography>
                                         <Typography variant="body2" sx={{ mb: 0.5 }}>
-                                          Payment to this Invoice:{' '}
-                                          {pay.payment_on_invoice || 'N/A'}
+                                          Payment to this Invoice: {pay.payment_on_invoice || 'N/A'}
                                         </Typography>
                                         <Typography variant="body2" sx={{ mb: 0.5 }}>
                                           Total Received: {pay.total_payment_amount ?? 'N/A'}

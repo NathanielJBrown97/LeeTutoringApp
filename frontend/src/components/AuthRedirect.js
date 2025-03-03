@@ -3,37 +3,50 @@
 import React, { useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
+import { jwtDecode } from 'jwt-decode';
 
 const AuthRedirect = () => {
   const navigate = useNavigate();
   const { updateToken } = useContext(AuthContext);
 
   useEffect(() => {
-    // Extract the token from the URL fragment
-    const token = window.location.hash.substr(1); // Remove the '#' at the beginning
+    // Extract the token from the URL fragment (removes the '#' at the beginning)
+    const token = window.location.hash.substr(1);
     console.log('Extracted token:', token);
 
     if (token) {
-      // Store the token in localStorage
+      // Save token in localStorage and update our AuthContext state
       localStorage.setItem('authToken', token);
-
-      // Update the token in AuthContext
       updateToken(token);
 
-      // Remove the token from the URL to clean up
+      // Clean up the URL
       window.history.replaceState({}, document.title, window.location.pathname);
 
-      // Redirect to the dashboard
-      navigate('/parentdashboard');
-      console.log('Navigated to /parentdashboard');
+      // Decode the token to extract the user's role
+      let decoded;
+      try {
+        decoded = jwtDecode(token);
+        console.log('Decoded token:', decoded);
+      } catch (error) {
+        console.error('Error decoding token:', error);
+      }
+
+      // Based on the role, navigate to the appropriate dashboard
+      if (decoded && decoded.role === 'tutor') {
+        navigate('/tutordashboard');
+        console.log('Navigated to /tutordashboard');
+      } else {
+        navigate('/parentdashboard');
+        console.log('Navigated to /parentdashboard');
+      }
     } else {
-      // If no token is found, redirect to the sign-in page
+      // No token found: redirect to sign in
       navigate('/');
       console.log('Navigated to /');
     }
   }, [navigate, updateToken]);
 
-  return <div>Loading...</div>; // Optional: show a loading indicator while redirecting
+  return <div>Loading...</div>;
 };
 
 export default AuthRedirect;

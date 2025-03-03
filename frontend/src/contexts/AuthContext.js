@@ -20,7 +20,7 @@ export const AuthProvider = ({ children }) => {
 
     if (token) {
       try {
-        // Decode the token to get user information
+        // Decode the token to get user information including role
         const decoded = jwtDecode(token);
         console.log('Decoded token:', decoded);
 
@@ -28,7 +28,6 @@ export const AuthProvider = ({ children }) => {
         const currentTime = Date.now() / 1000; // in seconds
         if (decoded.exp < currentTime) {
           console.log('Token has expired');
-          // Token has expired
           localStorage.removeItem('authToken');
           setToken(null);
           setAuthState({
@@ -39,12 +38,13 @@ export const AuthProvider = ({ children }) => {
           });
         } else {
           console.log('Token is valid');
-          // Token is valid
+          // Store user information including role in the state
           setAuthState({
             authenticated: true,
             user: {
               id: decoded.user_id,
               email: decoded.email,
+              role: decoded.role, // Ensure your token includes this property
               associatedStudents: decoded.associated_students || [],
             },
             loading: false,

@@ -203,11 +203,17 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Determine the Firestore collection based on the email domain
+	collectionName := "parents"
+	if strings.HasSuffix(email, "@leetutoring.com") {
+		collectionName = "tutors"
+	}
+
 	// Use the existing Firestore client from App
 	firestoreClient := a.FirestoreClient
 
-	// Reference to the parent's document
-	docRef := firestoreClient.Collection("parents").Doc(userID)
+	// Reference to the user's document in the chosen collection
+	docRef := firestoreClient.Collection(collectionName).Doc(userID)
 	doc, err := docRef.Get(context.Background())
 
 	if err != nil {
@@ -254,7 +260,7 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 			updates = append(updates, firestore.Update{Path: "name", Value: name})
 			needsUpdate = true
 		}
-		// Update hasProfilePicture if it has changed
+		// Update has_profile_picture if it has changed
 		if data["has_profile_picture"] != hasProfilePicture {
 			updates = append(updates, firestore.Update{Path: "has_profile_picture", Value: hasProfilePicture})
 			needsUpdate = true

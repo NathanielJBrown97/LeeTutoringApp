@@ -18,6 +18,7 @@ import (
 	microsoftauth "github.com/NathanielJBrown97/LeeTutoringApp/internal/microsoftauth"
 	"github.com/NathanielJBrown97/LeeTutoringApp/internal/middleware"
 	parentpkg "github.com/NathanielJBrown97/LeeTutoringApp/internal/parent"
+	"github.com/NathanielJBrown97/LeeTutoringApp/internal/tutordashboard"
 	"github.com/NathanielJBrown97/LeeTutoringApp/internal/yahooauth"
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
@@ -155,6 +156,11 @@ func main() {
 		FirestoreClient: firestoreClient,
 	}
 
+	// Create an instance of the tutor dashboard app.
+	tutorDashboardApp := tutordashboard.App{
+		FirestoreClient: firestoreClient,
+		// ... initialize other fields if necessary
+	}
 	// Initialize Intuit OAuth Services
 	intuitOAuthSvc, err := intuitoauth.NewOAuthService(context.Background(), firestoreClient)
 	if err != nil {
@@ -167,9 +173,45 @@ func main() {
 	// Use the AuthMiddleware for protected routes
 	authMiddleware := middleware.AuthMiddleware(secretKey)
 
-	// API routes with CORS and OPTIONS handling
+	// TUTOR DASHBOARD HANDLERS
+	// associate students route
+	r.HandleFunc("/api/tutor/associate-students", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		// Wrap with the auth middleware to ensure only authenticated tutors can trigger it.
+		authMiddleware(http.HandlerFunc(tutordashboard.AssociateStudentsHandler(firestoreClient))).ServeHTTP(w, r)
+	}).Methods("GET", "OPTIONS")
 
-	// Dashboard route
+	// Tutor Profile Route
+	r.HandleFunc("/api/tutor/profile", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(tutordashboard.FetchTutorProfileHandler(firestoreClient))).ServeHTTP(w, r)
+	}).Methods("GET", "OPTIONS")
+
+	// Tutor Student Detail route - returns detailed student info only if the student is associated with the tutor.
+	r.HandleFunc("/api/tutor/students/{student_id}", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(tutorDashboardApp.TutorStudentDetailHandler)).ServeHTTP(w, r)
+	}).Methods("GET", "OPTIONS")
+
+	// This endpoint returns the list of associated students (IDs and optionally names) for the tutor.
+	r.HandleFunc("/api/tutor/fetch-associated-students", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(tutordashboard.FetchAssociatedStudentsHandler(firestoreClient))).ServeHTTP(w, r)
+	}).Methods("GET", "OPTIONS")
+
+	// PARENT Dashboard route
 	r.HandleFunc("/api/dashboard", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
 			// Handle preflight request

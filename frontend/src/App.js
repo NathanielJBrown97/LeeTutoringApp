@@ -1,10 +1,11 @@
-// src/App.js 
+// src/App.js
 
 import React, { useContext, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, AuthContext } from './contexts/AuthContext';
 import SignIn from './components/SignIn';
 import ParentDashboard from './components/ParentDashboard';
+import TutorDashboard from './components/TutorDashboard';
 import StudentIntake from './components/StudentIntake';
 import BookingPage from './components/BookingPage';
 import AuthRedirect from './components/AuthRedirect';
@@ -27,7 +28,6 @@ function AppRoutes() {
       {/* Public Routes (not logged in) */}
       {!authState.authenticated && (
         <>
-          {/* Wrap SignIn with NoScrollWrapper */}
           <Route
             path="/"
             element={
@@ -45,10 +45,23 @@ function AppRoutes() {
       {authState.authenticated && (
         <>
           <Route path="/parentdashboard" element={<ParentDashboard />} />
+          <Route path="/tutordashboard" element={<TutorDashboard />} />
           <Route path="/studentintake" element={<StudentIntake />} />
           <Route path="/booking" element={<BookingPage />} />
           <Route path="/parentprofile" element={<ParentProfile />} />
-          <Route path="*" element={<Navigate to="/parentdashboard" />} />
+          {/* Default route based on role */}
+          <Route
+            path="*"
+            element={
+              <Navigate
+                to={
+                  authState.user?.role === 'tutor'
+                    ? '/tutordashboard'
+                    : '/parentdashboard'
+                }
+              />
+            }
+          />
         </>
       )}
     </Routes>

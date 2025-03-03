@@ -1,3 +1,5 @@
+// backend/internal/appleauth/callback.go
+
 package appleauth
 
 import (
@@ -10,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/firestore"
@@ -158,8 +161,15 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Now store/update the user in Firestore
-	docRef := firestoreClient.Collection("parents").Doc(userID)
+	// Determine the Firestore collection based on the email domain.
+	// If the email ends with "@leetutoring.com", use the "tutors" collection.
+	collectionName := "parents"
+	if strings.HasSuffix(email, "@leetutoring.com") {
+		collectionName = "tutors"
+	}
+
+	// Now store/update the user in Firestore using the determined collection
+	docRef := firestoreClient.Collection(collectionName).Doc(userID)
 	docSnap, err := docRef.Get(context.Background())
 	if err != nil {
 		if status.Code(err) == codes.NotFound {

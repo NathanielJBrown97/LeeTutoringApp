@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/firestore"
@@ -71,16 +72,25 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		pictureURL = ""
 	}
 
-	// Generate a JWT token without associated_students
+	// Generate a JWT token with role (and without associated_students for tutors)
 	tokenClaims := jwt.MapClaims{
 		"user_id": userID,
 		"email":   email,
 		"exp":     time.Now().Add(7 * 24 * time.Hour).Unix(), // Token expires in 7 days
 	}
 
+	// Determine the Firestore collection based on the email domain and set the role
+	collectionName := "parents"
+	if strings.HasSuffix(email, "@leetutoring.com") {
+		collectionName = "tutors"
+		tokenClaims["role"] = "tutor"
+	} else {
+		tokenClaims["role"] = "parent"
+	}
+
 	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, tokenClaims)
 
-	// Use the secret key
+	// Use the secret key to sign the token
 	signedToken, err := jwtToken.SignedString([]byte(a.SecretKey))
 	if err != nil {
 		log.Printf("Failed to sign JWT token: %v", err)
@@ -91,23 +101,38 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	// Use the existing Firestore client from App
 	firestoreClient := a.FirestoreClient
 
-	// Reference to the parent's document
-	docRef := firestoreClient.Collection("parents").Doc(userID)
+	// Reference to the user's document in the chosen collection
+	docRef := firestoreClient.Collection(collectionName).Doc(userID)
 	doc, err := docRef.Get(context.Background())
 
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
-			// User doesn't exist, create a new document
-			_, err = docRef.Set(context.Background(), map[string]interface{}{
-				"user_id":             userID,
-				"email":               email,
-				"name":                name,
-				"picture":             pictureURL,
-				"access_token":        token.AccessToken,
-				"refresh_token":       token.RefreshToken,
-				"expiry":              token.Expiry,
-				"associated_students": []interface{}{},
-			})
+			// User doesn't exist, create a new document.
+			// For tutors, we do not create an "associated_students" field.
+			var userData map[string]interface{}
+			if collectionName == "tutors" {
+				userData = map[string]interface{}{
+					"user_id":       userID,
+					"email":         email,
+					"name":          name,
+					"picture":       pictureURL,
+					"access_token":  token.AccessToken,
+					"refresh_token": token.RefreshToken,
+					"expiry":        token.Expiry,
+				}
+			} else {
+				userData = map[string]interface{}{
+					"user_id":             userID,
+					"email":               email,
+					"name":                name,
+					"picture":             pictureURL,
+					"access_token":        token.AccessToken,
+					"refresh_token":       token.RefreshToken,
+					"expiry":              token.Expiry,
+					"associated_students": []interface{}{},
+				}
+			}
+			_, err = docRef.Set(context.Background(), userData)
 			if err != nil {
 				http.Error(w, "Failed to create user document in Firestore", http.StatusInternalServerError)
 				return
@@ -117,7 +142,7 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		// User exists, optionally update tokens if they have changed
+		// User exists, optionally update tokens if they have changed.
 		data := doc.Data()
 		needsUpdate := false
 		updates := []firestore.Update{}
@@ -134,12 +159,12 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 			updates = append(updates, firestore.Update{Path: "expiry", Value: token.Expiry})
 			needsUpdate = true
 		}
-		// Update name if it has changed
+		// Update name if it has changed.
 		if data["name"] != name {
 			updates = append(updates, firestore.Update{Path: "name", Value: name})
 			needsUpdate = true
 		}
-		// Update picture URL if it has changed
+		// Update picture URL if it has changed.
 		if data["picture"] != pictureURL {
 			updates = append(updates, firestore.Update{Path: "picture", Value: pictureURL})
 			needsUpdate = true
@@ -158,7 +183,7 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("OAuthCallbackHandler: User authenticated: %s (%s)", userID, email)
 	log.Printf("OAuthCallbackHandler: Redirecting to dashboard")
 
-	// Redirect to the React app's dashboard route with the token in the URL fragment
+	// Redirect to the React app's dashboard route with the token in the URL fragment.
 	redirectURL := fmt.Sprintf("%s/auth-redirect#%s", "https://lee-tutoring-webapp.web.app", signedToken)
 	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }
