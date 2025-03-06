@@ -21,6 +21,7 @@ import {
   Pagination
 } from '@mui/material';
 import { styled } from '@mui/system';
+import TodaySchedule from './TodaySchedule';
 
 // -------------------- Brand Colors --------------------
 const brandBlue = '#0e1027';
@@ -94,7 +95,7 @@ const SectionTitle = styled(Typography)(({ theme }) => ({
   },
 }));
 
-// Simple TabPanel helper
+// Simple TabPanel helper for both main and inner tabs.
 function TabPanel(props) {
   const { children, value, index, ...other } = props;
   return (
@@ -104,17 +105,48 @@ function TabPanel(props) {
   );
 }
 
+// A simple component to render individual info cards.
+function InfoCard({ item }) {
+  return (
+    <Card variant="outlined" sx={{ marginBottom: 2 }}>
+      <CardContent>
+        {Object.entries(item).map(([key, value]) => (
+          <Typography key={key} variant="body2">
+            <strong>{key}:</strong> {String(value)}
+          </Typography>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 // -------------------- StudentsTab Component --------------------
-// This component fetches the list of associated student IDs and then their detailed data.
-// Note that we now destructure tutorEmail from props.
-function StudentsTab({ tutorId, tutorEmail, backendUrl }) {
+// Now accepts an optional prop "filterTodayAppointments".
+// If true, only students with an appointment today are displayed.
+function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments = false }) {
   const [studentIds, setStudentIds] = useState([]);
   const [studentDetails, setStudentDetails] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [innerTab, setInnerTab] = useState(0);
   const studentsPerPage = 10;
 
-  // Fetch associated students list
+  // Helper: Check if a student had an appointment today.
+  const hadAppointmentToday = (student) => {
+    if (!student.appointments || student.appointments.length === 0) return false;
+    const today = new Date();
+    return student.appointments.some((appointment) => {
+      const appDate = new Date(appointment.date);
+      return (
+        appDate.getFullYear() === today.getFullYear() &&
+        appDate.getMonth() === today.getMonth() &&
+        appDate.getDate() === today.getDate()
+      );
+    });
+  };
+
+  // Fetch associated students list.
   useEffect(() => {
     async function fetchAssociatedStudents() {
       try {
@@ -130,12 +162,11 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl }) {
             },
           }
         );
-  
         if (!res.ok) {
           console.error('StudentsTab: Failed to fetch associated students. Status:', res.status);
           return;
         }
-        const ids = await res.json(); // Expected: [{ id: string, name?: string }, ...]
+        const ids = await res.json();
         console.log("StudentsTab: Fetched associated student IDs:", ids);
         setStudentIds(ids);
       } catch (error) {
@@ -146,7 +177,7 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl }) {
       fetchAssociatedStudents();
     }
   }, [tutorId, tutorEmail, backendUrl]);
-  
+
   // For each associated student, fetch detailed info.
   useEffect(() => {
     async function fetchStudentDetails() {
@@ -186,16 +217,20 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl }) {
     }
   }, [studentIds, tutorId, tutorEmail, backendUrl]);
 
-  // Pagination calculations
+  // Apply filtering if needed.
+  const filteredDetails = filterTodayAppointments ? studentDetails.filter(hadAppointmentToday) : studentDetails;
+
+  // Pagination calculations.
   const indexOfLast = currentPage * studentsPerPage;
   const indexOfFirst = indexOfLast - studentsPerPage;
-  const currentStudents = studentDetails.slice(indexOfFirst, indexOfLast);
-  const totalPages = Math.ceil(studentDetails.length / studentsPerPage);
+  const currentStudents = filteredDetails.slice(indexOfFirst, indexOfLast);
+  const totalPages = Math.ceil(filteredDetails.length / studentsPerPage);
 
   const handlePageChange = (event, value) => {
     setCurrentPage(value);
   };
 
+  // Render loading state.
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" sx={{ padding: '24px' }}>
@@ -204,16 +239,119 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl }) {
     );
   }
 
-  if (studentDetails.length === 0) {
-    return <Typography variant="body1">No associated students found.</Typography>;
+  // If a student is selected, show the expanded detailed view.
+  if (selectedStudent) {
+    const sortedHomework = selectedStudent.homeworkCompletion && selectedStudent.homeworkCompletion.length > 0
+      ? selectedStudent.homeworkCompletion.slice().sort((a, b) => {
+          if(a.timestamp && b.timestamp) return b.timestamp - a.timestamp;
+          if(a.date && b.date) return new Date(b.date) - new Date(a.date);
+          return 0;
+        })
+      : [];
+    const sortedTestData = selectedStudent.testData && selectedStudent.testData.length > 0
+      ? selectedStudent.testData.slice().sort((a, b) => {
+          if(a.timestamp && b.timestamp) return b.timestamp - a.timestamp;
+          if(a.date && b.date) return new Date(b.date) - new Date(a.date);
+          return 0;
+        })
+      : [];
+    const sortedTestDates = selectedStudent.testDates && selectedStudent.testDates.length > 0
+      ? selectedStudent.testDates.slice().sort((a, b) => {
+          if(a.date && b.date) return new Date(b.date) - new Date(a.date);
+          return 0;
+        })
+      : [];
+    const sortedGoals = selectedStudent.goals && selectedStudent.goals.length > 0
+      ? selectedStudent.goals.slice().sort((a, b) => {
+          if(a.timestamp && b.timestamp) return b.timestamp - a.timestamp;
+          if(a.date && b.date) return new Date(b.date) - new Date(a.date);
+          return 0;
+        })
+      : [];
+
+    return (
+      <Box sx={{ padding: 2 }}>
+        <Button variant="outlined" onClick={() => setSelectedStudent(null)} sx={{ marginBottom: 2 }}>
+          Back to Students List
+        </Button>
+        <Typography variant="h5" sx={{ marginBottom: 2 }}>
+          {selectedStudent.personal?.name || 'Student Overview'}
+        </Typography>
+        <Box sx={{ marginBottom: 2 }}>
+          <Typography variant="subtitle1">Personal Details:</Typography>
+          {Object.entries(selectedStudent.personal || {}).map(([key, value]) => (
+            <Typography key={key}>
+              <strong>{key}:</strong> {value}
+            </Typography>
+          ))}
+        </Box>
+        <Box sx={{ marginBottom: 2 }}>
+          <Typography variant="subtitle1">Business Details:</Typography>
+          <Typography>
+            <strong>Team Lead:</strong> {selectedStudent.business?.team_lead || 'N/A'}
+          </Typography>
+          <Typography>
+            <strong>Test Focus:</strong> {selectedStudent.business?.test_focus || 'N/A'}
+          </Typography>
+        </Box>
+        <Tabs value={innerTab} onChange={(e, newValue) => setInnerTab(newValue)}>
+          <Tab label="Homework Completion" />
+          <Tab label="Test Data" />
+          <Tab label="Test Dates" />
+          <Tab label="Goals" />
+        </Tabs>
+        <TabPanel value={innerTab} index={0}>
+          {sortedHomework.length > 0 ? (
+            sortedHomework.map((item) => <InfoCard key={item.id} item={item} />)
+          ) : (
+            <Typography>No Homework Completion data available.</Typography>
+          )}
+        </TabPanel>
+        <TabPanel value={innerTab} index={1}>
+          {sortedTestData.length > 0 ? (
+            sortedTestData.map((item) => <InfoCard key={item.id} item={item} />)
+          ) : (
+            <Typography>No Test Data available.</Typography>
+          )}
+        </TabPanel>
+        <TabPanel value={innerTab} index={2}>
+          {sortedTestDates.length > 0 ? (
+            sortedTestDates.map((item) => <InfoCard key={item.id} item={item} />)
+          ) : (
+            <Typography>No Test Dates available.</Typography>
+          )}
+        </TabPanel>
+        <TabPanel value={innerTab} index={3}>
+          {sortedGoals.length > 0 ? (
+            sortedGoals.map((item) => <InfoCard key={item.id} item={item} />)
+          ) : (
+            <Typography>No Goals available.</Typography>
+          )}
+        </TabPanel>
+      </Box>
+    );
   }
 
+  // Otherwise, show the grid of student cards.
   return (
     <Box>
       <Grid container spacing={2}>
         {currentStudents.map((student) => (
           <Grid item xs={12} sm={6} md={4} lg={3} key={student.id}>
-            <Card variant="outlined" sx={{ minHeight: '120px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: 1 }}>
+            <Card
+              variant="outlined"
+              onClick={() => setSelectedStudent(student)}
+              sx={{
+                minHeight: '120px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'center',
+                padding: 1,
+                cursor: 'pointer',
+                '&:hover': { boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }
+              }}
+            >
               <CardContent>
                 <Typography variant="h6" align="center">
                   {student.personal?.name || 'Unknown'}
@@ -243,6 +381,7 @@ const TutorDashboard = () => {
   const [associationComplete, setAssociationComplete] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [profile, setProfile] = useState(null);
+  const [todayStudentNames, setTodayStudentNames] = useState([]);
 
   // Backend URL 
   const backendUrl = process.env.REACT_APP_API_BASE_URL;
@@ -422,11 +561,36 @@ const TutorDashboard = () => {
           <Typography variant="h4" sx={{ fontWeight: 700 }}>
             Your Schedule Today:
           </Typography>
-          <Typography variant="body1" sx={{ opacity: 0.9, marginTop: '8px' }}>
-            Here There Will Be a Visual Graphic Showing Upcoming Appointments...
-          </Typography>
+          {profile && profile.user_id ? (
+            <Box sx={{ marginTop: '16px', paddingRight: '40px' }}>
+              <TodaySchedule
+                tutorId={profile.user_id}
+                backendUrl={backendUrl}
+                onStudentNamesUpdate={(names) => setTodayStudentNames(names)}
+              />
+            </Box>
+          ) : (
+            <Typography variant="body1" sx={{ opacity: 0.9, marginTop: '8px' }}>
+              Loading your schedule...
+            </Typography>
+          )}
         </HeroSection>
       </Container>
+
+      {/* ---------- Today's Appointments Section ---------- */}
+      {profile && profile.user_id && profile.email && (
+        <Container maxWidth="xl" sx={{ marginBottom: '24px' }}>
+          <Typography variant="h4" sx={{ fontWeight: 700, marginBottom: '16px' }}>
+            Today's Appointments:
+          </Typography>
+          <StudentsTab
+            tutorId={profile.user_id}
+            tutorEmail={profile.email}
+            backendUrl={backendUrl}
+            filterTodayAppointments={true}
+          />
+        </Container>
+      )}
 
       {/* ---------- Main Content (Tabs etc.) ---------- */}
       <Container maxWidth="xl">
@@ -441,6 +605,7 @@ const TutorDashboard = () => {
               scrollButtons="auto"
               sx={{ marginBottom: '16px' }}
             >
+              <Tab label="Today's Students" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
               <Tab label="My Students" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
               <Tab label="My Schedule" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
               <Tab label="Tutor Tools" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
@@ -448,6 +613,21 @@ const TutorDashboard = () => {
           </Box>
 
           <TabPanel value={activeTab} index={0}>
+            <SectionContainer>
+              <SectionTitle variant="h6">Today's Students</SectionTitle>
+              {todayStudentNames && todayStudentNames.length > 0 ? (
+                todayStudentNames.map((name, index) => (
+                  <Typography key={index} variant="body1" sx={{ marginBottom: '8px' }}>
+                    {name}
+                  </Typography>
+                ))
+              ) : (
+                <Typography variant="body1">No students scheduled for today.</Typography>
+              )}
+            </SectionContainer>
+          </TabPanel>
+
+          <TabPanel value={activeTab} index={1}>
             <SectionContainer>
               <SectionTitle variant="h6">My Students</SectionTitle>
               {profile && profile.user_id && profile.email ? (
@@ -466,16 +646,16 @@ const TutorDashboard = () => {
             </SectionContainer>
           </TabPanel>
 
-          <TabPanel value={activeTab} index={1}>
+          <TabPanel value={activeTab} index={2}>
             <SectionContainer>
-              <SectionTitle variant="h6">Today's Schedule</SectionTitle>
+              <SectionTitle variant="h6">My Schedule</SectionTitle>
               <Typography variant="body1">
-                No appointments scheduled for today.
+                Schedule Coming Soon...
               </Typography>
             </SectionContainer>
           </TabPanel>
 
-          <TabPanel value={activeTab} index={2}>
+          <TabPanel value={activeTab} index={3}>
             <SectionContainer>
               <SectionTitle variant="h6">Tutor Tools</SectionTitle>
               <Typography variant="body1">

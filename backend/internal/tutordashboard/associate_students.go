@@ -19,7 +19,7 @@ var tutorNameMapping = map[string]string{
 	"edward@leetutoring.com":    "Edward",
 	"eli@leetutoring.com":       "Eli",
 	"ben@leetutoring.com":       "Ben",
-	"nathaniel@leetutoring.com": "Kyra",
+	"nathaniel@leetutoring.com": "Edward",
 }
 
 // AssociateStudentsForTutor iterates through all student documents in the "students" collection.

@@ -52,7 +52,7 @@ func main() {
 		ClientID:     cfg.GOOGLE_CLIENT_ID,
 		ClientSecret: cfg.GOOGLE_CLIENT_SECRET,
 		RedirectURL:  cfg.GOOGLE_REDIRECT_URL,
-		Scopes:       []string{"email", "profile"},
+		Scopes:       []string{"email", "profile", "https://www.googleapis.com/auth/calendar.readonly"},
 		Endpoint:     google.Endpoint,
 	}
 
@@ -174,6 +174,11 @@ func main() {
 	authMiddleware := middleware.AuthMiddleware(secretKey)
 
 	// TUTOR DASHBOARD HANDLERS
+	// Tutor Calendar Events route
+	r.HandleFunc("/api/tutor/calendar-events", func(w http.ResponseWriter, r *http.Request) {
+		authMiddleware(http.HandlerFunc(tutorDashboardApp.CalendarEventsHandler)).ServeHTTP(w, r)
+	}).Methods("GET", "OPTIONS")
+
 	// associate students route
 	r.HandleFunc("/api/tutor/associate-students", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
