@@ -207,6 +207,16 @@ func main() {
 		authMiddleware(http.HandlerFunc(tutorDashboardApp.TutorStudentDetailHandler)).ServeHTTP(w, r)
 	}).Methods("GET", "OPTIONS")
 
+	// Tutor get students by name
+	r.HandleFunc("/api/tutor/fetch-students-by-names", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		// Wrap with authMiddleware so only authenticated tutors can access
+		authMiddleware(http.HandlerFunc(tutorDashboardApp.FetchStudentsByNamesHandler)).ServeHTTP(w, r)
+	}).Methods("POST", "OPTIONS")
+
 	// This endpoint returns the list of associated students (IDs and optionally names) for the tutor.
 	r.HandleFunc("/api/tutor/fetch-associated-students", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
