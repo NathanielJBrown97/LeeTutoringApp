@@ -140,6 +140,16 @@ function formatTime(timeObj) {
 }
 
 /**
+ * Helper: Format a Date object as YYYY-MM-DD in local time.
+ */
+function formatDateLocal(date) {
+  const year = date.getFullYear();
+  const month = ('0' + (date.getMonth() + 1)).slice(-2);
+  const day = ('0' + date.getDate()).slice(-2);
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * A single event card component similar in style to Today's Schedule.
  */
 function EventCard({ event }) {
@@ -205,8 +215,6 @@ function EventCard({ event }) {
 /**
  * MySchedule Component
  * Displays a weekly schedule as 7 Accordions (Sunday -> Saturday) for the current week.
- * All events for the week are fetched at once upon component mount for a smoother experience.
- * All accordions start collapsed.
  */
 function MySchedule({ tutorId, backendUrl }) {
   const [weekDays, setWeekDays] = useState([]);
@@ -226,6 +234,7 @@ function MySchedule({ tutorId, backendUrl }) {
       d.setDate(startOfWeek.getDate() + i);
       days.push(d);
     }
+    console.log('MySchedule: Computed weekDays:', days.map(d => formatDateLocal(d)));
     setWeekDays(days);
   }, []);
 
@@ -235,43 +244,57 @@ function MySchedule({ tutorId, backendUrl }) {
       setLoading(true);
       setError(null);
       try {
+        // Compute time range for the current week.
+        const timeMin = weekDays[0].toISOString();
+        // Set timeMax as the end of the last day (add 24 hours to the last day)
+        const timeMax = new Date(weekDays[6].getTime() + 24 * 60 * 60 * 1000).toISOString();
+        console.log('MySchedule: timeMin:', timeMin, 'timeMax:', timeMax);
+
+        // Append query parameters to request events for the full week with singleEvents=true.
+        const fetchUrl = `${backendUrl}/api/tutor/calendar-events?user_id=${encodeURIComponent(tutorId)}&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true`;
+        console.log('MySchedule: Fetching events from:', fetchUrl);
         const token = localStorage.getItem('authToken');
-        const res = await fetch(
-          `${backendUrl}/api/tutor/calendar-events?user_id=${encodeURIComponent(tutorId)}`,
-          {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + token,
-            }
+        const res = await fetch(fetchUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token,
           }
-        );
+        });
         if (!res.ok) {
           throw new Error(`Error: ${res.status}`);
         }
         const data = await res.json();
         const events = data.items || [];
+        console.log('MySchedule: Fetched events:', events);
+
         // For each day in the week, filter events that match the day.
         const schedules = weekDays.map(day => {
-          return events.filter(event => {
-            const start = event.start?.dateTime
-              ? new Date(event.start.dateTime)
-              : new Date(event.start.date);
-            return (
-              start.getFullYear() === day.getFullYear() &&
-              start.getMonth() === day.getMonth() &&
-              start.getDate() === day.getDate()
-            );
+          const dayStr = formatDateLocal(day);
+          const filteredEvents = events.filter(event => {
+            let eventDateStr = '';
+            if (event.start?.date) {
+              eventDateStr = event.start.date;
+            } else if (event.start?.dateTime) {
+              // Slice the ISO string to get YYYY-MM-DD.
+              eventDateStr = event.start.dateTime.slice(0, 10);
+            }
+            return eventDateStr === dayStr;
           });
+          console.log(`MySchedule: For day ${dayStr}, found ${filteredEvents.length} event(s).`);
+          return filteredEvents;
         });
         setDailySchedules(schedules);
       } catch (err) {
+        console.error('MySchedule: Error fetching events:', err);
         setError(err.message);
       } finally {
         setLoading(false);
+        console.log('MySchedule: Loading complete. dailySchedules:', dailySchedules);
       }
     }
     if (tutorId && weekDays.length === 7) {
+      console.log('MySchedule: Fetching events with weekDays:', weekDays.map(d => formatDateLocal(d)));
       fetchEvents();
     }
   }, [tutorId, backendUrl, weekDays]);

@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, forwardRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
 import {
@@ -20,11 +20,20 @@ import {
   CardContent,
   Pagination,
   Autocomplete,
-  TextField
+  TextField,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Slide
 } from '@mui/material';
 import { styled } from '@mui/system';
 import TodaySchedule from './TodaySchedule';
 import MySchedule from './MySchedule'; // NEW: Import MySchedule
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import collegeData from './collegeData'; // Import the college data
 
 // -------------------- Brand Colors --------------------
 const brandBlue = '#0e1027';
@@ -98,6 +107,32 @@ const SectionTitle = styled(Typography)(({ theme }) => ({
   },
 }));
 
+// New styled components for "My Students" section
+const StyledStudentCard = styled(Card)(({ theme }) => ({
+  backgroundColor: '#fff',
+  border: `1px solid ${brandBlue}`,
+  borderRadius: '8px',
+  minHeight: '140px',
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'center',
+  alignItems: 'center',
+  padding: theme.spacing(2),
+  cursor: 'pointer',
+  transition: 'transform 0.3s, box-shadow 0.3s',
+  '&:hover': {
+    transform: 'scale(1.02)',
+    boxShadow: '0 6px 16px rgba(0,0,0,0.15)'
+  },
+}));
+
+const StyledExpandedStudentView = styled(Paper)(({ theme }) => ({
+  padding: theme.spacing(3),
+  borderRadius: '12px',
+  backgroundColor: '#fff',
+  boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+}));
+
 // Simple TabPanel helper for both main and inner tabs.
 function TabPanel(props) {
   const { children, value, index, ...other } = props;
@@ -108,8 +143,9 @@ function TabPanel(props) {
   );
 }
 
-// A simple component to render individual info cards.
-function InfoCard({ item }) {
+// -------------------- Updated InfoCard Component --------------------
+// Now each card displays two small icon buttons (edit and delete) at the bottom right.
+function InfoCard({ item, onEdit = (item) => { console.log("Edit not implemented", item); }, onDelete = (item) => { console.log("Delete not implemented", item); } }) {
   return (
     <Card variant="outlined" sx={{ marginBottom: 2 }}>
       <CardContent>
@@ -119,7 +155,54 @@ function InfoCard({ item }) {
           </Typography>
         ))}
       </CardContent>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5, p: 1 }}>
+        <Button variant="text" size="small" onClick={() => onEdit(item)}>
+          <EditIcon fontSize="small" />
+        </Button>
+        <Button variant="text" size="small" onClick={() => onDelete(item)}>
+          <DeleteIcon fontSize="small" />
+        </Button>
+      </Box>
     </Card>
+  );
+}
+
+// -------------------- NewGoalDialog Component --------------------
+// This component renders an animated dialog that prompts the user to select a college.
+const Transition = forwardRef(function Transition(props, ref) {
+  return <Slide direction="up" ref={ref} {...props} />;
+});
+
+function NewGoalDialog({ open, onClose, onSubmit }) {
+  const [selectedCollege, setSelectedCollege] = useState(null);
+
+  return (
+    <Dialog open={open} TransitionComponent={Transition} keepMounted onClose={onClose}>
+      <DialogTitle>Create New Goal</DialogTitle>
+      <DialogContent>
+        <Autocomplete
+          options={collegeData}
+          getOptionLabel={(option) => option.school}
+          renderInput={(params) => <TextField {...params} label="Select College" variant="outlined" />}
+          onChange={(event, value) => setSelectedCollege(value)}
+          fullWidth
+          clearOnEscape
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button
+          onClick={() => {
+            if (selectedCollege) {
+              onSubmit(selectedCollege);
+            }
+          }}
+          variant="contained"
+        >
+          Submit
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -132,7 +215,12 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [innerTab, setInnerTab] = useState(0);
+  const [showNewGoalDialog, setShowNewGoalDialog] = useState(false);
   const studentsPerPage = 10;
+
+  // Responsive hooks for StudentsTab
+  const theme = useTheme();
+  const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Helper: Check if a student had an appointment today.
   const hadAppointmentToday = (student) => {
@@ -241,7 +329,75 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
     );
   }
 
-  // If a student is selected, show the expanded detailed view.
+  // Handler for Create New button based on innerTab.
+  const handleCreateNew = (tabIndex) => {
+    if (tabIndex === 3) {
+      setShowNewGoalDialog(true);
+    } else {
+      console.log(`Creating new entry for tab index ${tabIndex}`);
+      // Placeholder for other tabs.
+    }
+  };
+
+  // Handler for submitting a new goal.
+  const handleNewGoalSubmit = async (college) => {
+    // Package up the payload:
+    const payload = {
+      firebase_id: selectedStudent.id,
+      college: college.school,
+      act_percentiles: {
+        p25: college.act25,
+        p50: college.act50,
+        p75: college.act75
+      },
+      sat_percentiles: {
+        p25: college.sat25,
+        p50: college.sat50,
+        p75: college.sat75
+      }
+    };
+    console.log("Submitting new goal payload:", payload);
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${backendUrl}/api/tutor/create-goal`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        console.error('Failed to create new goal. Status:', res.status);
+      } else {
+        console.log('New goal created successfully.');
+        // Re-fetch updated student details to refresh the view
+        const res2 = await fetch(
+          `${backendUrl}/api/tutor/students/${selectedStudent.id}?tutorUserID=${encodeURIComponent(tutorId)}&tutorEmail=${encodeURIComponent(tutorEmail)}`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+          }
+        );
+        if (res2.ok) {
+          const updatedStudent = await res2.json();
+          setSelectedStudent(updatedStudent); // Update state so the UI reflects the new goal
+        } else {
+          console.error('Failed to refresh student details. Status:', res2.status);
+        }
+      }
+    } catch (error) {
+      console.error('Error creating new goal:', error);
+    } finally {
+      setShowNewGoalDialog(false);
+    }
+  };
+  
+
+  // When a student is selected, show the expanded detailed view.
   if (selectedStudent) {
     const sortedHomework = selectedStudent.homeworkCompletion && selectedStudent.homeworkCompletion.length > 0
       ? selectedStudent.homeworkCompletion.slice().sort((a, b) => {
@@ -271,16 +427,39 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
         })
       : [];
 
-    return (
-      <Box sx={{ padding: 2 }}>
-        <Button variant="outlined" onClick={() => setSelectedStudent(null)} sx={{ marginBottom: 2 }}>
-          Back to Students List
-        </Button>
+    // Functions to return the proper label and handle click based on the current inner tab.
+    const getCreateButtonLabel = (tabIndex) => {
+      switch(tabIndex) {
+        case 0: return 'Create New Homework';
+        case 1: return 'Create New Test Data';
+        case 2: return 'Create New Test Date';
+        case 3: return 'Create New Goal';
+        default: return 'Create New';
+      }
+    };
+
+    const handleEditPersonalDetails = () => {
+      console.log("Edit Personal Details", selectedStudent);
+      // Placeholder for edit functionality.
+    };
+
+    const handleEditBusinessDetails = () => {
+      console.log("Edit Business Details", selectedStudent);
+      // Placeholder for edit functionality.
+    };
+
+    const ExpandedViewContent = (
+      <Box sx={{ marginBottom: 2 }}>
         <Typography variant="h5" sx={{ marginBottom: 2 }}>
           {selectedStudent.personal?.name || 'Student Overview'}
         </Typography>
         <Box sx={{ marginBottom: 2 }}>
-          <Typography variant="subtitle1">Personal Details:</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Typography variant="subtitle1">Personal Details:</Typography>
+            <IconButton size="small" onClick={handleEditPersonalDetails}>
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Box>
           {Object.entries(selectedStudent.personal || {}).map(([key, value]) => (
             <Typography key={key}>
               <strong>{key}:</strong> {value}
@@ -288,7 +467,12 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
           ))}
         </Box>
         <Box sx={{ marginBottom: 2 }}>
-          <Typography variant="subtitle1">Business Details:</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Typography variant="subtitle1">Business Details:</Typography>
+            <IconButton size="small" onClick={handleEditBusinessDetails}>
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Box>
           <Typography>
             <strong>Team Lead:</strong> {selectedStudent.business?.team_lead || 'N/A'}
           </Typography>
@@ -296,12 +480,22 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
             <strong>Test Focus:</strong> {selectedStudent.business?.test_focus || 'N/A'}
           </Typography>
         </Box>
-        <Tabs value={innerTab} onChange={(e, newValue) => setInnerTab(newValue)}>
-          <Tab label="Homework Completion" />
-          <Tab label="Test Data" />
-          <Tab label="Test Dates" />
-          <Tab label="Goals" />
-        </Tabs>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+          <Tabs value={innerTab} onChange={(e, newValue) => setInnerTab(newValue)}>
+            <Tab label="Homework Completion" />
+            <Tab label="Test Data" />
+            <Tab label="Test Dates" />
+            <Tab label="Goals" />
+          </Tabs>
+          <Button
+            variant="contained"
+            size={isSmallScreen ? "small" : "medium"}
+            onClick={() => handleCreateNew(innerTab)}
+            sx={{ marginLeft: 2 }}
+          >
+            {getCreateButtonLabel(innerTab)}
+          </Button>
+        </Box>
         <TabPanel value={innerTab} index={0}>
           {sortedHomework.length > 0 ? (
             sortedHomework.map((item) => <InfoCard key={item.id} item={item} />)
@@ -330,6 +524,29 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
             <Typography>No Goals available.</Typography>
           )}
         </TabPanel>
+        {showNewGoalDialog && (
+          <NewGoalDialog
+            open={showNewGoalDialog}
+            onClose={() => setShowNewGoalDialog(false)}
+            onSubmit={handleNewGoalSubmit}
+          />
+        )}
+      </Box>
+    );
+
+    return enableSearch ? (
+      <StyledExpandedStudentView sx={{ padding: 3, margin: 2 }}>
+        <Button variant="outlined" onClick={() => setSelectedStudent(null)} sx={{ marginBottom: 2 }}>
+          Back to Students List
+        </Button>
+        {ExpandedViewContent}
+      </StyledExpandedStudentView>
+    ) : (
+      <Box sx={{ padding: 2 }}>
+        <Button variant="outlined" onClick={() => setSelectedStudent(null)} sx={{ marginBottom: 2 }}>
+          Back to Students List
+        </Button>
+        {ExpandedViewContent}
       </Box>
     );
   }
@@ -354,29 +571,47 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
       <Grid container spacing={2}>
         {currentStudents.map((student) => (
           <Grid item xs={12} sm={6} md={4} lg={3} key={student.id}>
-            <Card
-              variant="outlined"
-              onClick={() => setSelectedStudent(student)}
-              sx={{
-                minHeight: '120px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                alignItems: 'center',
-                padding: 1,
-                cursor: 'pointer',
-                '&:hover': { boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }
-              }}
-            >
-              <CardContent>
-                <Typography variant="h6" align="center">
-                  {student.personal?.name || 'Unknown'}
-                </Typography>
-                <Typography variant="body2" align="center" color="textSecondary">
-                  {student.business?.test_focus || 'No Focus'}
-                </Typography>
-              </CardContent>
-            </Card>
+            {enableSearch ? (
+              <StyledStudentCard
+                onClick={() => setSelectedStudent(student)}
+                sx={{
+                  cursor: 'pointer'
+                }}
+              >
+                <CardContent>
+                  <Typography variant="h6" align="center">
+                    {student.personal?.name || 'Unknown'}
+                  </Typography>
+                  <Typography variant="body2" align="center" color="textSecondary">
+                    {student.business?.test_focus || 'No Focus'}
+                  </Typography>
+                </CardContent>
+              </StyledStudentCard>
+            ) : (
+              <Card
+                variant="outlined"
+                onClick={() => setSelectedStudent(student)}
+                sx={{
+                  minHeight: '120px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  padding: 1,
+                  cursor: 'pointer',
+                  '&:hover': { boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }
+                }}
+              >
+                <CardContent>
+                  <Typography variant="h6" align="center">
+                    {student.personal?.name || 'Unknown'}
+                  </Typography>
+                  <Typography variant="body2" align="center" color="textSecondary">
+                    {student.business?.test_focus || 'No Focus'}
+                  </Typography>
+                </CardContent>
+              </Card>
+            )}
           </Grid>
         ))}
       </Grid>
@@ -486,7 +721,7 @@ const TutorDashboard = () => {
     }
   }, [profile, backendUrl]);
 
-  // ========== NEW: Fetch full detail for today's student names ========== 
+  // ========== NEW: Fetch full detail for today's student names ==========
   useEffect(() => {
     async function fetchTodaysStudentsDetail() {
       if (!todayStudentNames || todayStudentNames.length === 0) {
@@ -522,7 +757,7 @@ const TutorDashboard = () => {
       }
     }
     fetchTodaysStudentsDetail();
-  }, [todayStudentNames, backendUrl, calendarLoaded]); // ADDED: watch calendarLoaded
+  }, [todayStudentNames, backendUrl, calendarLoaded]);
 
   // Combine the raw names with any found student details.
   const combinedTodayStudents = todayStudentNames.map((rawName) => {
@@ -530,7 +765,6 @@ const TutorDashboard = () => {
       (st) =>
         st.personal?.name?.trim().toLowerCase() === rawName.trim().toLowerCase()
     );
-    
     
     if (match) {
       return { found: true, data: match };
@@ -547,8 +781,6 @@ const TutorDashboard = () => {
   });
 
   // Expand/collapse behavior for "Today's Students" tab
-  // When an associated student is clicked, we expand to show the detailed view.
-  // For not associated students, the card is not clickable.
   const handleSelectTodayStudent = (studentObj) => {
     setSelectedTodayStudent(studentObj);
   };
@@ -781,7 +1013,12 @@ const TutorDashboard = () => {
                     {selectedTodayStudent.personal?.name || 'Student Overview'}
                   </Typography>
                   <Box sx={{ marginBottom: 2 }}>
-                    <Typography variant="subtitle1">Personal Details:</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Typography variant="subtitle1">Personal Details:</Typography>
+                      <IconButton size="small" onClick={() => console.log("Edit Personal Details", selectedTodayStudent)}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
                     {Object.entries(selectedTodayStudent.personal || {}).map(([key, value]) => (
                       <Typography key={key}>
                         <strong>{key}:</strong> {value}
@@ -789,7 +1026,12 @@ const TutorDashboard = () => {
                     ))}
                   </Box>
                   <Box sx={{ marginBottom: 2 }}>
-                    <Typography variant="subtitle1">Business Details:</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Typography variant="subtitle1">Business Details:</Typography>
+                      <IconButton size="small" onClick={() => console.log("Edit Business Details", selectedTodayStudent)}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
                     <Typography>
                       <strong>Team Lead:</strong> {selectedTodayStudent.business?.team_lead || 'N/A'}
                     </Typography>

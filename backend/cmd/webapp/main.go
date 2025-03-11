@@ -226,6 +226,15 @@ func main() {
 		authMiddleware(http.HandlerFunc(tutordashboard.FetchAssociatedStudentsHandler(firestoreClient))).ServeHTTP(w, r)
 	}).Methods("GET", "OPTIONS")
 
+	// TUTOR TOOLS
+	r.HandleFunc("/api/tutor/create-goal", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(tutordashboard.CreateGoalHandler(firestoreClient))).ServeHTTP(w, r)
+	}).Methods("POST", "OPTIONS")
+
 	// PARENT Dashboard route
 	r.HandleFunc("/api/dashboard", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
