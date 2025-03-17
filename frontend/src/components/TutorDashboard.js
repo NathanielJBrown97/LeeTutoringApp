@@ -34,6 +34,8 @@ import MySchedule from './MySchedule'; // NEW: Import MySchedule
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import collegeData from './collegeData'; // Import the college data
+import CreateTestDataDialog from './createTestData';
+import EditTestDataDialog from './editTestData';
 
 // -------------------- Brand Colors --------------------
 const brandBlue = '#0e1027';
@@ -133,6 +135,39 @@ const StyledExpandedStudentView = styled(Paper)(({ theme }) => ({
   boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
 }));
 
+// edit notes test dates
+const EditNotesDialog = ({ open, onClose, onSubmit, initialNotes = '' }) => {
+  const [notes, setNotes] = useState(initialNotes);
+
+  useEffect(() => {
+    setNotes(initialNotes);
+  }, [initialNotes]);
+
+  return (
+    <Dialog open={open} onClose={onClose}>
+      <DialogTitle>Update Notes:</DialogTitle>
+      <DialogContent>
+        <TextField
+          autoFocus
+          margin="dense"
+          label="Notes"
+          type="text"
+          fullWidth
+          variant="outlined"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={() => onSubmit(notes)} variant="contained">
+          Submit
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 // Simple TabPanel helper for both main and inner tabs.
 function TabPanel(props) {
   const { children, value, index, ...other } = props;
@@ -145,6 +180,7 @@ function TabPanel(props) {
 
 // -------------------- Updated InfoCard Component --------------------
 // Now each card displays two small icon buttons (edit and delete) at the bottom right.
+// The Edit button is rendered only if onEdit is not null.
 function InfoCard({ item, onEdit = (item) => { console.log("Edit not implemented", item); }, onDelete = (item) => { console.log("Delete not implemented", item); } }) {
   return (
     <Card variant="outlined" sx={{ marginBottom: 2 }}>
@@ -156,9 +192,11 @@ function InfoCard({ item, onEdit = (item) => { console.log("Edit not implemented
         ))}
       </CardContent>
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5, p: 1 }}>
-        <Button variant="text" size="small" onClick={() => onEdit(item)}>
-          <EditIcon fontSize="small" />
-        </Button>
+        {onEdit != null && (
+          <Button variant="text" size="small" onClick={() => onEdit(item)}>
+            <EditIcon fontSize="small" />
+          </Button>
+        )}
         <Button variant="text" size="small" onClick={() => onDelete(item)}>
           <DeleteIcon fontSize="small" />
         </Button>
@@ -216,6 +254,14 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [innerTab, setInnerTab] = useState(0);
   const [showNewGoalDialog, setShowNewGoalDialog] = useState(false);
+  const [openTestDatesDialog, setOpenTestDatesDialog] = useState(false);
+  const [currentTestDate, setCurrentTestDate] = useState(null);
+  // NEW: Declare state for the new Test Data dialog
+  const [showNewTestDataDialog, setShowNewTestDataDialog] = useState(false);
+  // NEW: Declare state for the edit test data dialog
+  const [showEditTestDataDialog, setShowEditTestDataDialog] = useState(false);
+  const [editingTestData, setEditingTestData] = useState(null);
+
   const studentsPerPage = 10;
 
   // Responsive hooks for StudentsTab
@@ -333,6 +379,8 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
   const handleCreateNew = (tabIndex) => {
     if (tabIndex === 3) {
       setShowNewGoalDialog(true);
+    } else if (tabIndex === 1) {
+      setShowNewTestDataDialog(true);
     } else {
       console.log(`Creating new entry for tab index ${tabIndex}`);
       // Placeholder for other tabs.
@@ -341,7 +389,6 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
 
   // Handler for submitting a new goal.
   const handleNewGoalSubmit = async (college) => {
-    // Package up the payload:
     const payload = {
       firebase_id: selectedStudent.id,
       college: college.school,
@@ -371,7 +418,6 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
         console.error('Failed to create new goal. Status:', res.status);
       } else {
         console.log('New goal created successfully.');
-        // Re-fetch updated student details to refresh the view
         const res2 = await fetch(
           `${backendUrl}/api/tutor/students/${selectedStudent.id}?tutorUserID=${encodeURIComponent(tutorId)}&tutorEmail=${encodeURIComponent(tutorEmail)}`,
           {
@@ -384,7 +430,7 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
         );
         if (res2.ok) {
           const updatedStudent = await res2.json();
-          setSelectedStudent(updatedStudent); // Update state so the UI reflects the new goal
+          setSelectedStudent(updatedStudent);
         } else {
           console.error('Failed to refresh student details. Status:', res2.status);
         }
@@ -395,9 +441,176 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
       setShowNewGoalDialog(false);
     }
   };
-  
 
-  // When a student is selected, show the expanded detailed view.
+  // Handler for editing test data.
+  const handleEditTestData = (item) => {
+    setEditingTestData(item);
+    setShowEditTestDataDialog(true);
+  };
+
+  // Handler for submitting edited test data.
+  const handleEditTestDataSubmit = (payload) => {
+    const token = localStorage.getItem('authToken');
+    fetch(`${backendUrl}/api/tutor/edit-test-data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        firebase_id: selectedStudent.id,
+        ...payload,
+      }),
+    })
+      .then((res) => {
+        if (!res.ok) {
+          alert("Failed to edit test data.");
+          throw new Error("Failed to edit test data.");
+        } else {
+          alert("Test data updated successfully.");
+          // Refresh student details after successful update.
+          return fetch(
+            `${backendUrl}/api/tutor/students/${selectedStudent.id}?tutorUserID=${encodeURIComponent(tutorId)}&tutorEmail=${encodeURIComponent(tutorEmail)}`,
+            {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+              },
+            }
+          );
+        }
+      })
+      .then((res2) => {
+        if (!res2.ok) {
+          throw new Error("Failed to refresh student details.");
+        }
+        return res2.json();
+      })
+      .then((updatedStudent) => {
+        setSelectedStudent(updatedStudent);
+      })
+      .catch((error) => {
+        console.error('Error editing test data:', error);
+        alert("Error editing test data.");
+      })
+      .finally(() => {
+        setShowEditTestDataDialog(false);
+        setEditingTestData(null);
+      });
+  };
+
+  // Handler for deleting test data.
+  const handleDeleteTestData = async (item) => {
+    const confirmDelete = window.confirm("Are you sure you want to delete this test data?");
+    if (!confirmDelete) return;
+  
+    try {
+      const token = localStorage.getItem('authToken');
+      // Send the delete request with the proper payload.
+      const res = await fetch(`${backendUrl}/api/tutor/delete-test-data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          firebase_id: selectedStudent.id,
+          test_data_id: item.id,
+        }),
+      });
+      if (!res.ok) {
+        console.error('Failed to delete test data. Status:', res.status);
+        alert("Failed to delete test data.");
+        return;
+      }
+      alert("Test data deleted successfully.");
+      // Refresh the student details so that the UI immediately shows the changes.
+      const res2 = await fetch(
+        `${backendUrl}/api/tutor/students/${selectedStudent.id}?tutorUserID=${encodeURIComponent(tutorId)}&tutorEmail=${encodeURIComponent(tutorEmail)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+      if (res2.ok) {
+        const updatedStudent = await res2.json();
+        setSelectedStudent(updatedStudent);
+      }
+    } catch (error) {
+      console.error('Error deleting test data:', error);
+      alert("Error deleting test data.");
+    }
+  };
+
+  // Handler for deleting a goal.
+  const handleDeleteGoal = async (goal) => {
+    const confirmDelete = window.confirm("Are you sure you want to delete this goal?");
+    if (!confirmDelete) return;
+    const payload = {
+      firebase_id: selectedStudent.id,
+      college: goal.College,
+    };
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${backendUrl}/api/tutor/delete-goal`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        console.error('Failed to delete goal. Status:', res.status);
+        alert("Failed to delete goal.");
+        return;
+      }
+      alert("Goal deleted successfully.");
+      const res2 = await fetch(
+        `${backendUrl}/api/tutor/students/${selectedStudent.id}?tutorUserID=${encodeURIComponent(tutorId)}&tutorEmail=${encodeURIComponent(tutorEmail)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+      if (res2.ok) {
+        const updatedStudent = await res2.json();
+        setSelectedStudent(updatedStudent);
+      } else {
+        console.error('Failed to refresh student details. Status:', res2.status);
+      }
+    } catch (error) {
+      console.error('Error deleting goal:', error);
+      alert("Error deleting goal.");
+    }
+  };
+
+  // Function to return the proper label based on the inner tab.
+  const getCreateButtonLabel = (tabIndex) => {
+    switch(tabIndex) {
+      case 0: return 'Create New Homework';
+      case 1: return 'Create New Test Data';
+      case 2: return 'Update Test Dates';
+      case 3: return 'Create New Goal';
+      default: return 'Create New';
+    }
+  };
+
+  const handleEditPersonalDetails = () => {
+    console.log("Edit Personal Details", selectedStudent);
+  };
+
+  const handleEditBusinessDetails = () => {
+    console.log("Edit Business Details", selectedStudent);
+  };
+
   if (selectedStudent) {
     const sortedHomework = selectedStudent.homeworkCompletion && selectedStudent.homeworkCompletion.length > 0
       ? selectedStudent.homeworkCompletion.slice().sort((a, b) => {
@@ -415,7 +628,7 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
       : [];
     const sortedTestDates = selectedStudent.testDates && selectedStudent.testDates.length > 0
       ? selectedStudent.testDates.slice().sort((a, b) => {
-          if(a.date && b.date) return new Date(b.date) - new Date(a.date);
+          if(a.test_date && b.test_date) return new Date(b.test_date) - new Date(a.test_date);
           return 0;
         })
       : [];
@@ -426,27 +639,6 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
           return 0;
         })
       : [];
-
-    // Functions to return the proper label and handle click based on the current inner tab.
-    const getCreateButtonLabel = (tabIndex) => {
-      switch(tabIndex) {
-        case 0: return 'Create New Homework';
-        case 1: return 'Create New Test Data';
-        case 2: return 'Create New Test Date';
-        case 3: return 'Create New Goal';
-        default: return 'Create New';
-      }
-    };
-
-    const handleEditPersonalDetails = () => {
-      console.log("Edit Personal Details", selectedStudent);
-      // Placeholder for edit functionality.
-    };
-
-    const handleEditBusinessDetails = () => {
-      console.log("Edit Business Details", selectedStudent);
-      // Placeholder for edit functionality.
-    };
 
     const ExpandedViewContent = (
       <Box sx={{ marginBottom: 2 }}>
@@ -505,21 +697,107 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
         </TabPanel>
         <TabPanel value={innerTab} index={1}>
           {sortedTestData.length > 0 ? (
-            sortedTestData.map((item) => <InfoCard key={item.id} item={item} />)
+            sortedTestData.map((item) => (
+              <Card key={item.id} variant="outlined" sx={{ marginBottom: 2, padding: 2 }}>
+                <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                  Test Data: {item.id}
+                </Typography>
+                <Typography>
+                  <strong>Date:</strong> {item.date}
+                </Typography>
+                <Typography>
+                  <strong>Baseline:</strong> {String(item.baseline)}
+                </Typography>
+                <Typography>
+                  <strong>Test:</strong> {item.test}
+                </Typography>
+                <Typography>
+                  <strong>Type:</strong> {item.type}
+                </Typography>
+                {item.ACT_Scores && (
+                  <Box sx={{ mt: 1 }}>
+                    <Typography variant="subtitle2">ACT Scores:</Typography>
+                    <Typography>
+                      <strong>ACT_Total:</strong> {item.ACT_Scores.ACT_Total}
+                    </Typography>
+                    <Typography>
+                      <strong>English:</strong> {item.ACT_Scores.English}
+                    </Typography>
+                    <Typography>
+                      <strong>Math:</strong> {item.ACT_Scores.Math}
+                    </Typography>
+                    <Typography>
+                      <strong>Reading:</strong> {item.ACT_Scores.Reading}
+                    </Typography>
+                    <Typography>
+                      <strong>Science:</strong> {item.ACT_Scores.Science}
+                    </Typography>
+                  </Box>
+                )}
+                {item.SAT_Scores && (
+                  <Box sx={{ mt: 1 }}>
+                    <Typography variant="subtitle2">SAT Scores:</Typography>
+                    <Typography>
+                      <strong>SAT_Total:</strong> {item.SAT_Scores.SAT_Total}
+                    </Typography>
+                    <Typography>
+                      <strong>EBRW:</strong> {item.SAT_Scores.EBRW}
+                    </Typography>
+                    <Typography>
+                      <strong>Math:</strong> {item.SAT_Scores.Math}
+                    </Typography>
+                    <Typography>
+                      <strong>Reading:</strong> {item.SAT_Scores.Reading}
+                    </Typography>
+                    <Typography>
+                      <strong>Writing:</strong> {item.SAT_Scores.Writing}
+                    </Typography>
+                  </Box>
+                )}
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5, p: 1 }}>
+                  <Button variant="text" size="small" onClick={() => handleEditTestData(item)}>
+                    <EditIcon fontSize="small" />
+                  </Button>
+                  <Button variant="text" size="small" onClick={() => handleDeleteTestData(item)}>
+                    <DeleteIcon fontSize="small" />
+                  </Button>
+                </Box>
+              </Card>
+            ))
           ) : (
             <Typography>No Test Data available.</Typography>
           )}
         </TabPanel>
         <TabPanel value={innerTab} index={2}>
           {sortedTestDates.length > 0 ? (
-            sortedTestDates.map((item) => <InfoCard key={item.id} item={item} />)
+            sortedTestDates.map((item) => (
+              <Card key={item.id} variant="outlined" sx={{ marginBottom: 2 }}>
+                <CardContent>
+                  {Object.entries(item).map(([key, value]) => (
+                    <Typography key={key} variant="body2">
+                      <strong>{key}:</strong> {String(value)}
+                    </Typography>
+                  ))}
+                </CardContent>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1 }}>
+                  <Button variant="text" size="small" onClick={() => {
+                    setCurrentTestDate(item);
+                    setOpenTestDatesDialog(true);
+                  }}>
+                    <EditIcon fontSize="small" />
+                  </Button>
+                </Box>
+              </Card>
+            ))
           ) : (
             <Typography>No Test Dates available.</Typography>
           )}
         </TabPanel>
         <TabPanel value={innerTab} index={3}>
           {sortedGoals.length > 0 ? (
-            sortedGoals.map((item) => <InfoCard key={item.id} item={item} />)
+            sortedGoals.map((item) => (
+              <InfoCard key={item.id} item={item} onDelete={handleDeleteGoal} onEdit={enableSearch ? null : undefined} />
+            ))
           ) : (
             <Typography>No Goals available.</Typography>
           )}
@@ -529,6 +807,121 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
             open={showNewGoalDialog}
             onClose={() => setShowNewGoalDialog(false)}
             onSubmit={handleNewGoalSubmit}
+          />
+        )}
+        {showNewTestDataDialog && (
+          <CreateTestDataDialog
+            open={showNewTestDataDialog}
+            onClose={() => setShowNewTestDataDialog(false)}
+            onSubmit={(payload) => {
+              const newPayload = {
+                ...payload,
+                firebase_id: selectedStudent.id,
+              };
+              console.log("New Test Data payload:", newPayload);
+              const token = localStorage.getItem('authToken');
+              fetch(`${backendUrl}/api/tutor/create-test-data`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify(newPayload),
+              })
+                .then((res) => {
+                  if (!res.ok) {
+                    console.error('Failed to create test data. Status:', res.status);
+                    alert("Failed to create test data.");
+                  } else {
+                    alert("Test data created successfully.");
+                    fetch(
+                      `${backendUrl}/api/tutor/students/${selectedStudent.id}?tutorUserID=${encodeURIComponent(tutorId)}&tutorEmail=${encodeURIComponent(tutorEmail)}`,
+                      {
+                        method: 'GET',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${token}`,
+                        },
+                      }
+                    )
+                      .then((res2) => {
+                        if (res2.ok) {
+                          return res2.json();
+                        }
+                        throw new Error(`Failed to refresh student details. Status: ${res2.status}`);
+                      })
+                      .then((updatedStudent) => {
+                        setSelectedStudent(updatedStudent);
+                      })
+                      .catch((error) => {
+                        console.error(error);
+                      });
+                  }
+                })
+                .catch((error) => {
+                  console.error('Error creating test data:', error);
+                  alert("Error creating test data.");
+                })
+                .finally(() => {
+                  setShowNewTestDataDialog(false);
+                });
+            }}
+          />
+        )}
+        {showEditTestDataDialog && editingTestData && (
+          <EditTestDataDialog
+            open={showEditTestDataDialog}
+            onClose={() => {
+              setShowEditTestDataDialog(false);
+              setEditingTestData(null);
+            }}
+            onSubmit={handleEditTestDataSubmit}
+            initialData={editingTestData}
+          />
+        )}
+        {openTestDatesDialog && (
+          <EditNotesDialog
+            open={openTestDatesDialog}
+            onClose={() => {
+              setOpenTestDatesDialog(false);
+              setCurrentTestDate(null);
+            }}
+            onSubmit={(notes) => {
+              const payload = {
+                firebase_id: selectedStudent.id,
+                document_name: currentTestDate.id,
+                notes: notes,
+              };
+              fetch(`${backendUrl}/api/tutor/edit-test-dates-notes`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                },
+                body: JSON.stringify(payload),
+              })
+                .then((res) => {
+                  if (!res.ok) {
+                    console.error('Failed to update test date notes. Status:', res.status);
+                    alert("Failed to update notes.");
+                  } else {
+                    alert("Test date notes updated successfully.");
+                    const updatedTestDates = selectedStudent.testDates.map((td) =>
+                      td.id === currentTestDate.id ? { ...td, notes: payload.notes } : td
+                    );
+                    setSelectedStudent({ ...selectedStudent, testDates: updatedTestDates });
+                  }
+                })
+                .catch((error) => {
+                  console.error('Error updating test date notes:', error);
+                  alert("Error updating notes.");
+                })
+                .finally(() => {
+                  setOpenTestDatesDialog(false);
+                  setCurrentTestDate(null);
+                });
+            }}
+            initialNotes={currentTestDate ? currentTestDate.notes || '' : ''}
           />
         )}
       </Box>
@@ -553,7 +946,6 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
 
   return (
     <Box>
-      {/* If search is enabled, show an Autocomplete search field */}
       {enableSearch && (
         <Box sx={{ marginBottom: 2 }}>
           <Autocomplete
@@ -642,7 +1034,7 @@ const TutorDashboard = () => {
   const [todayLoading, setTodayLoading] = useState(false);
 
   // ADD: We'll track if the calendar has finished loading from TodaySchedule
-  const [calendarLoaded, setCalendarLoaded] = useState(false); // ADDED
+  const [calendarLoaded, setCalendarLoaded] = useState(false);
 
   // Backend URL 
   const backendUrl = process.env.REACT_APP_API_BASE_URL;
@@ -728,11 +1120,8 @@ const TutorDashboard = () => {
         setTodaysStudentDetails([]);
         return;
       }
-      // Wait until the calendar has loaded the final names
-      if (!calendarLoaded) return; // ADDED: skip fetch if calendar not done
-
+      if (!calendarLoaded) return;
       setTodayLoading(true);
-
       try {
         const token = localStorage.getItem('authToken');
         const res = await fetch(`${backendUrl}/api/tutor/fetch-students-by-names`, {
@@ -759,17 +1148,14 @@ const TutorDashboard = () => {
     fetchTodaysStudentsDetail();
   }, [todayStudentNames, backendUrl, calendarLoaded]);
 
-  // Combine the raw names with any found student details.
   const combinedTodayStudents = todayStudentNames.map((rawName) => {
     const match = todaysStudentDetails.find(
       (st) =>
         st.personal?.name?.trim().toLowerCase() === rawName.trim().toLowerCase()
     );
-    
     if (match) {
       return { found: true, data: match };
     }
-    // Not found in DB: include a "Not Associated" flag.
     return {
       found: false,
       data: {
@@ -780,7 +1166,6 @@ const TutorDashboard = () => {
     };
   });
 
-  // Expand/collapse behavior for "Today's Students" tab
   const handleSelectTodayStudent = (studentObj) => {
     setSelectedTodayStudent(studentObj);
   };
@@ -788,43 +1173,36 @@ const TutorDashboard = () => {
     setSelectedTodayStudent(null);
   };
 
-  // For "found" students, replicate the sorting logic
   function sortSubcollections(st) {
     if (!st) return st;
     const clone = { ...st };
     const { homeworkCompletion = [], testData = [], testDates = [], goals = [] } = clone;
-
     clone.homeworkCompletion =
       homeworkCompletion.slice().sort((a, b) => {
         if (a.timestamp && b.timestamp) return b.timestamp - a.timestamp;
         if (a.date && b.date) return new Date(b.date) - new Date(a.date);
         return 0;
       });
-
     clone.testData =
       testData.slice().sort((a, b) => {
         if (a.timestamp && b.timestamp) return b.timestamp - a.timestamp;
         if (a.date && b.date) return new Date(b.date) - new Date(a.date);
         return 0;
       });
-
     clone.testDates =
       testDates.slice().sort((a, b) => {
-        if (a.date && b.date) return new Date(b.date) - new Date(a.date);
+        if (a.test_date && b.test_date) return new Date(b.test_date) - new Date(a.test_date);
         return 0;
       });
-
     clone.goals =
       goals.slice().sort((a, b) => {
         if (a.timestamp && b.timestamp) return b.timestamp - a.timestamp;
         if (a.date && b.date) return new Date(b.date) - new Date(a.date);
         return 0;
       });
-
     return clone;
   }
 
-  // For the detail expansion panel in "Today's Students"
   const [innerTab, setInnerTab] = useState(0);
   const handleInnerTabChange = (event, newValue) => {
     setInnerTab(newValue);
@@ -850,7 +1228,6 @@ const TutorDashboard = () => {
 
   return (
     <RootContainer>
-      {/* ---------- AppBar with Personalized Welcome ---------- */}
       <StyledAppBar position="static" elevation={3}>
         <Toolbar disableGutters sx={{ px: 2, py: 1 }}>
           {isMobile ? (
@@ -924,8 +1301,6 @@ const TutorDashboard = () => {
           )}
         </Toolbar>
       </StyledAppBar>
-
-      {/* ---------- Hero Section ---------- */}
       <Container maxWidth="xl" sx={{ marginTop: '24px' }}>
         <HeroSection>
           <Typography variant="h4" sx={{ fontWeight: 700 }}>
@@ -936,10 +1311,8 @@ const TutorDashboard = () => {
               <TodaySchedule
                 tutorId={profile.user_id}
                 backendUrl={backendUrl}
-                // We'll set calendarLoaded=true once the schedule finishes
                 onCalendarLoaded={() => setCalendarLoaded(true)}
                 onStudentNamesUpdate={(names) => {
-                  // Additional check to avoid re-setting the same array repeatedly
                   const oldSet = new Set(todayStudentNames.map((n) => n.trim()));
                   const newSet = new Set(names.map((n) => n.trim()));
                   if (oldSet.size === newSet.size) {
@@ -950,7 +1323,7 @@ const TutorDashboard = () => {
                         break;
                       }
                     }
-                    if (allSame) return; // same array
+                    if (allSame) return;
                   }
                   setTodayStudentNames(names);
                 }}
@@ -963,8 +1336,6 @@ const TutorDashboard = () => {
           )}
         </HeroSection>
       </Container>
-
-      {/* ---------- Today's Appointments Section ---------- */}
       {profile && profile.user_id && profile.email && (
         <Container maxWidth="xl" sx={{ marginBottom: '24px' }}>
           <Typography variant="h4" sx={{ fontWeight: 700, marginBottom: '16px' }}>
@@ -978,8 +1349,6 @@ const TutorDashboard = () => {
           />
         </Container>
       )}
-
-      {/* ---------- Main Content (Tabs etc.) ---------- */}
       <Container maxWidth="xl">
         <ContentWrapper>
           <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -998,13 +1367,10 @@ const TutorDashboard = () => {
               <Tab label="Tutor Tools" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
             </Tabs>
           </Box>
-
-          {/* ========== TAB 0: "Today's Students" ========== */}
           <TabPanel value={activeTab} index={0}>
             <SectionContainer>
               <SectionTitle variant="h6">Today's Students</SectionTitle>
               {selectedTodayStudent ? (
-                // Expanded view for an associated student
                 <Box sx={{ padding: 2 }}>
                   <Button variant="outlined" onClick={() => setSelectedTodayStudent(null)} sx={{ marginBottom: 2 }}>
                     Back to Students List
@@ -1070,7 +1436,7 @@ const TutorDashboard = () => {
                   <TabPanel value={innerTab} index={2}>
                     {selectedTodayStudent.testDates && selectedTodayStudent.testDates.length > 0 ? (
                       selectedTodayStudent.testDates.slice().sort((a, b) => {
-                        if(a.date && b.date) return new Date(b.date) - new Date(a.date);
+                        if(a.test_date && b.test_date) return new Date(b.test_date) - new Date(a.test_date);
                         return 0;
                       }).map((item) => <InfoCard key={item.id} item={item} />)
                     ) : (
@@ -1134,8 +1500,6 @@ const TutorDashboard = () => {
               )}
             </SectionContainer>
           </TabPanel>
-
-          {/* ========== TAB 1: "My Students" ========== */}
           <TabPanel value={activeTab} index={1}>
             <SectionContainer>
               {profile && profile.user_id && profile.email ? (
@@ -1154,8 +1518,6 @@ const TutorDashboard = () => {
               )}
             </SectionContainer>
           </TabPanel>
-
-          {/* ========== TAB 2: "My Schedule" ========== */}
           <TabPanel value={activeTab} index={2}>
             <SectionContainer>
               <SectionTitle variant="h6">My Schedule</SectionTitle>
@@ -1166,8 +1528,6 @@ const TutorDashboard = () => {
               )}
             </SectionContainer>
           </TabPanel>
-
-          {/* ========== TAB 3: "Tutor Tools" ========== */}
           <TabPanel value={activeTab} index={3}>
             <SectionContainer>
               <SectionTitle variant="h6">Tutor Tools</SectionTitle>

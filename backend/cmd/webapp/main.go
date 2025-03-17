@@ -227,12 +227,58 @@ func main() {
 	}).Methods("GET", "OPTIONS")
 
 	// TUTOR TOOLS
+	// delete test data
+	r.HandleFunc("/api/tutor/delete-test-data", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(tutordashboard.DeleteTestDataHandler(firestoreClient))).ServeHTTP(w, r)
+	}).Methods("POST", "OPTIONS")
+
+	// Create Test Data
+	r.HandleFunc("/api/tutor/create-test-data", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(tutordashboard.CreateTestDataHandler(firestoreClient))).ServeHTTP(w, r)
+	}).Methods("POST", "OPTIONS")
+
+	// Create Test Data
+	r.HandleFunc("/api/tutor/edit-test-data", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(tutordashboard.EditTestDataHandler(firestoreClient))).ServeHTTP(w, r)
+	}).Methods("POST", "OPTIONS")
+
+	// create goals
 	r.HandleFunc("/api/tutor/create-goal", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		authMiddleware(http.HandlerFunc(tutordashboard.CreateGoalHandler(firestoreClient))).ServeHTTP(w, r)
+	}).Methods("POST", "OPTIONS")
+
+	// delete goals
+	r.HandleFunc("/api/tutor/delete-goal", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(tutordashboard.DeleteGoalHandler(firestoreClient))).ServeHTTP(w, r)
+	}).Methods("POST", "OPTIONS")
+
+	// Edit Test Data Notes
+	r.HandleFunc("/api/tutor/edit-test-dates-notes", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(tutordashboard.EditTestDatesNotesHandler(firestoreClient))).ServeHTTP(w, r)
 	}).Methods("POST", "OPTIONS")
 
 	// PARENT Dashboard route

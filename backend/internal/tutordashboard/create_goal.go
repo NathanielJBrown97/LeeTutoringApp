@@ -4,7 +4,6 @@ package tutordashboard
 import (
 	"encoding/json"
 	"net/http"
-	"time"
 
 	"cloud.google.com/go/firestore"
 )
@@ -48,7 +47,6 @@ func CreateGoalHandler(client *firestore.Client) http.HandlerFunc {
 			"College":         req.College,
 			"SAT_percentiles": []string{req.SatPercentiles["p25"], req.SatPercentiles["p50"], req.SatPercentiles["p75"]},
 			"ACT_percentiles": []string{req.ActPercentiles["p25"], req.ActPercentiles["p50"], req.ActPercentiles["p75"]},
-			"created_at":      time.Now(),
 		}
 
 		// Write the new goal document in the student's subcollection "Goals" (using the college name as the document ID).
