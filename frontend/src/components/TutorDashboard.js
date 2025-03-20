@@ -26,7 +26,14 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Slide
+  Slide,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Checkbox,
+  FormControlLabel,
+  Slider
 } from '@mui/material';
 import { styled } from '@mui/system';
 import TodaySchedule from './TodaySchedule';
@@ -36,6 +43,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import collegeData from './collegeData'; // Import the college data
 import CreateTestDataDialog from './createTestData';
 import EditTestDataDialog from './editTestData';
+import CreateHomeworkCompletionDialog from './createHomeworkCompletion';
+import EditHomeworkCompletionDialog from './editHomeworkCompletion';
 
 // -------------------- Brand Colors --------------------
 const brandBlue = '#0e1027';
@@ -135,7 +144,174 @@ const StyledExpandedStudentView = styled(Paper)(({ theme }) => ({
   boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
 }));
 
-// edit notes test dates
+// -------------------- New Dialog: EditBusinessDetailsDialog --------------------
+function EditBusinessDetailsDialog({ open, onClose, onSubmit, initialData = {}, tutorFullName }) {
+  // State for each field
+  const [associatedTutors, setAssociatedTutors] = useState([]);
+  const [scheduler, setScheduler] = useState('');
+  const [status, setStatus] = useState('');
+  const [teamLead, setTeamLead] = useState('');
+  const [testFocus, setTestFocus] = useState('');
+  const [registeredForTest, setRegisteredForTest] = useState(false);
+  const [testDate, setTestDate] = useState('');
+  const [notes, setNotes] = useState('');
+
+
+  useEffect(() => {
+    if (open && initialData) {
+      setAssociatedTutors(initialData.associated_tutors || []);
+      setScheduler(initialData.scheduler || '');
+      setStatus(initialData.status || '');
+      setTeamLead(initialData.team_lead || '');
+      setTestFocus(initialData.test_focus || '');
+      setRegisteredForTest(initialData.test_appointment ? initialData.test_appointment.registered_for_test : false);
+      setTestDate(initialData.test_appointment ? initialData.test_appointment.test_date : '');
+      setNotes(initialData.notes || '');
+    }
+  }, [open, initialData]);
+
+  const handleSubmit = () => {
+    const payload = {
+      associated_tutors: associatedTutors,
+      scheduler,
+      status,
+      team_lead: teamLead,
+      test_focus: testFocus,
+      test_appointment: {
+        registered_for_test: registeredForTest,
+        test_date: testDate,
+      },
+      notes, 
+    };
+    onSubmit(payload);
+  };
+
+  const associatedTutorsOptions = ['Edward', 'Kyra', 'Ben', 'Eli', 'Patrick', 'Kieran'];
+  const schedulerOptions = ['Either Parent', 'Mother', 'Father', 'Student'];
+  const statusOptions = ['Awaiting Results', 'Active', 'Inactive'];
+  const teamLeadOptions = ['Edward', 'Eli', 'Ben', 'Kieran', 'Kyra', 'Patrick'];
+  const testFocusOptions = ['ACT', 'SAT'];
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Edit Business Details</DialogTitle>
+      <DialogContent>
+        <Box component="form" noValidate sx={{ mt: 2 }}>
+          {/* Associated Tutors Multi-select */}
+          <FormControl fullWidth margin="normal">
+            <InputLabel id="associated-tutors-label">Associated Tutors</InputLabel>
+            <Select
+              labelId="associated-tutors-label"
+              multiple
+              value={associatedTutors}
+              onChange={(e) => setAssociatedTutors(e.target.value)}
+              label="Associated Tutors"
+            >
+              {associatedTutorsOptions.map((name) => (
+                <MenuItem key={name} value={name}>
+                  {name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          {/* Scheduler Dropdown */}
+          <FormControl fullWidth margin="normal">
+            <InputLabel id="scheduler-label">Scheduler</InputLabel>
+            <Select
+              labelId="scheduler-label"
+              value={scheduler}
+              label="Scheduler"
+              onChange={(e) => setScheduler(e.target.value)}
+            >
+              {schedulerOptions.map((option) => (
+                <MenuItem key={option} value={option}>{option}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          {/* Status Dropdown */}
+          <FormControl fullWidth margin="normal">
+            <InputLabel id="status-label">Status</InputLabel>
+            <Select
+              labelId="status-label"
+              value={status}
+              label="Status"
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              {statusOptions.map((option) => (
+                <MenuItem key={option} value={option}>{option}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          {/* Team Lead Dropdown */}
+          <FormControl fullWidth margin="normal">
+            <InputLabel id="team-lead-label">Team Lead</InputLabel>
+            <Select
+              labelId="team-lead-label"
+              value={teamLead}
+              label="Team Lead"
+              onChange={(e) => setTeamLead(e.target.value)}
+            >
+              {teamLeadOptions.map((option) => (
+                <MenuItem key={option} value={option}>{option}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          {/* Test Focus Dropdown */}
+          <FormControl fullWidth margin="normal">
+            <InputLabel id="test-focus-label">Test Focus</InputLabel>
+            <Select
+              labelId="test-focus-label"
+              value={testFocus}
+              label="Test Focus"
+              onChange={(e) => setTestFocus(e.target.value)}
+            >
+              {testFocusOptions.map((option) => (
+                <MenuItem key={option} value={option}>{option}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          {/* Test Appointment */}
+          <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
+            <FormControl margin="normal" sx={{ mr: 2 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={registeredForTest}
+                    onChange={(e) => setRegisteredForTest(e.target.checked)}
+                  />
+                }
+                label="Registered for Test"
+              />
+            </FormControl>
+            <TextField
+              label="Test Date"
+              type="date"
+              value={testDate}
+              onChange={(e) => setTestDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              margin="normal"
+            />
+            <TextField
+              label="Notes"
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              fullWidth
+              margin="normal"
+            />
+
+          </Box>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={handleSubmit} variant="contained">Save Changes</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+// -------------------- EditNotesDialog Component --------------------
 const EditNotesDialog = ({ open, onClose, onSubmit, initialNotes = '' }) => {
   const [notes, setNotes] = useState(initialNotes);
 
@@ -168,7 +344,7 @@ const EditNotesDialog = ({ open, onClose, onSubmit, initialNotes = '' }) => {
   );
 };
 
-// Simple TabPanel helper for both main and inner tabs.
+// -------------------- Simple TabPanel helper --------------------
 function TabPanel(props) {
   const { children, value, index, ...other } = props;
   return (
@@ -179,8 +355,6 @@ function TabPanel(props) {
 }
 
 // -------------------- Updated InfoCard Component --------------------
-// Now each card displays two small icon buttons (edit and delete) at the bottom right.
-// The Edit button is rendered only if onEdit is not null.
 function InfoCard({ item, onEdit = (item) => { console.log("Edit not implemented", item); }, onDelete = (item) => { console.log("Delete not implemented", item); } }) {
   return (
     <Card variant="outlined" sx={{ marginBottom: 2 }}>
@@ -206,7 +380,6 @@ function InfoCard({ item, onEdit = (item) => { console.log("Edit not implemented
 }
 
 // -------------------- NewGoalDialog Component --------------------
-// This component renders an animated dialog that prompts the user to select a college.
 const Transition = forwardRef(function Transition(props, ref) {
   return <Slide direction="up" ref={ref} {...props} />;
 });
@@ -244,9 +417,124 @@ function NewGoalDialog({ open, onClose, onSubmit }) {
   );
 }
 
+function EditPersonalDetailsDialog({ open, onClose, onSubmit, initialData = {} }) {
+  const [name, setName] = useState(initialData.name || '');
+  const [accommodations, setAccommodations] = useState(initialData.accommodations || '');
+  const [grade, setGrade] = useState(initialData.grade || '');
+  const [highSchool, setHighSchool] = useState(initialData.high_school || '');
+  const [parentEmail, setParentEmail] = useState(initialData.parent_email || '');
+  const [studentEmail, setStudentEmail] = useState(initialData.student_email || '');
+  const [interests, setInterests] = useState(initialData.interests || '');
+  const [parentNumber, setParentNumber] = useState(initialData.parent_number || '');
+  const [studentNumber, setStudentNumber] = useState(initialData.student_number || '');
+
+  useEffect(() => {
+    setName(initialData.name || '');
+    setAccommodations(initialData.accommodations || '');
+    setGrade(initialData.grade || '');
+    setHighSchool(initialData.high_school || '');
+    setParentEmail(initialData.parent_email || '');
+    setStudentEmail(initialData.student_email || '');
+    setInterests(initialData.interests || '');
+    setParentNumber(initialData.parent_number || '');
+    setStudentNumber(initialData.student_number || '');
+  }, [initialData]);
+
+  const handleSubmit = () => {
+    const payload = {
+      name,
+      accommodations,
+      grade,
+      high_school: highSchool,
+      parent_email: parentEmail,
+      student_email: studentEmail,
+      interests,
+      parent_number: parentNumber,
+      student_number: studentNumber,
+    };
+    onSubmit(payload);
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Edit Personal Details</DialogTitle>
+      <DialogContent>
+        <TextField
+          margin="normal"
+          label="Name"
+          fullWidth
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <TextField
+          margin="normal"
+          label="Accommodations"
+          fullWidth
+          value={accommodations}
+          onChange={(e) => setAccommodations(e.target.value)}
+        />
+        <TextField
+          margin="normal"
+          label="Grade"
+          fullWidth
+          value={grade}
+          onChange={(e) => setGrade(e.target.value)}
+        />
+        <TextField
+          margin="normal"
+          label="High School"
+          fullWidth
+          value={highSchool}
+          onChange={(e) => setHighSchool(e.target.value)}
+        />
+        <TextField
+          margin="normal"
+          label="Parent Email"
+          fullWidth
+          value={parentEmail}
+          onChange={(e) => setParentEmail(e.target.value)}
+        />
+        <TextField
+          margin="normal"
+          label="Student Email"
+          fullWidth
+          value={studentEmail}
+          onChange={(e) => setStudentEmail(e.target.value)}
+        />
+        <TextField
+          margin="normal"
+          label="Interests"
+          fullWidth
+          value={interests}
+          onChange={(e) => setInterests(e.target.value)}
+        />
+        <TextField
+          margin="normal"
+          label="Parent Number"
+          fullWidth
+          value={parentNumber}
+          onChange={(e) => setParentNumber(e.target.value)}
+        />
+        <TextField
+          margin="normal"
+          label="Student Number"
+          fullWidth
+          value={studentNumber}
+          onChange={(e) => setStudentNumber(e.target.value)}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={handleSubmit} variant="contained">
+          Save Changes
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 // -------------------- StudentsTab Component --------------------
-// Added a new prop "enableSearch" (default false) to conditionally render the search field.
-function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments = false, enableSearch = false }) {
+function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments = false, enableSearch = false, tutorName }) {
   const [studentIds, setStudentIds] = useState([]);
   const [studentDetails, setStudentDetails] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -256,19 +544,20 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
   const [showNewGoalDialog, setShowNewGoalDialog] = useState(false);
   const [openTestDatesDialog, setOpenTestDatesDialog] = useState(false);
   const [currentTestDate, setCurrentTestDate] = useState(null);
-  // NEW: Declare state for the new Test Data dialog
   const [showNewTestDataDialog, setShowNewTestDataDialog] = useState(false);
-  // NEW: Declare state for the edit test data dialog
   const [showEditTestDataDialog, setShowEditTestDataDialog] = useState(false);
   const [editingTestData, setEditingTestData] = useState(null);
+  const [showNewHomeworkDialog, setShowNewHomeworkDialog] = useState(false);
+  const [showEditHomeworkDialog, setShowEditHomeworkDialog] = useState(false);
+  const [editingHomework, setEditingHomework] = useState(null);
+  const [showEditBusinessDialog, setShowEditBusinessDialog] = useState(false);
+  const [showEditPersonalDialog, setShowEditPersonalDialog] = useState(false);
+  const [editingPersonal, setEditingPersonal] = useState(null);
 
   const studentsPerPage = 10;
-
-  // Responsive hooks for StudentsTab
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
 
-  // Helper: Check if a student had an appointment today.
   const hadAppointmentToday = (student) => {
     if (!student.appointments || student.appointments.length === 0) return false;
     const today = new Date();
@@ -281,8 +570,65 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
       );
     });
   };
-
-  // Fetch associated students list.
+  useEffect(() => {
+    if (selectedStudent && selectedStudent.id) {
+      const token = localStorage.getItem('authToken');
+      fetch(
+        `${backendUrl}/api/tutor/get-personal-details?firebase_id=${encodeURIComponent(selectedStudent.id)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      )
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error(`Failed to fetch personal details. Status: ${res.status}`);
+          }
+          return res.json();
+        })
+        .then((data) => {
+          setSelectedStudent((prev) => ({
+            ...prev,
+            personal: data.personal,
+          }));
+        })
+        .catch((error) => {
+          console.error("Error fetching personal details:", error);
+        });
+    }
+  }, [selectedStudent?.id, backendUrl]);
+  
+  useEffect(() => {
+    if (selectedStudent && selectedStudent.id) {
+      const token = localStorage.getItem('authToken');
+      fetch(`${backendUrl}/api/tutor/get-business-details?firebase_id=${encodeURIComponent(selectedStudent.id)}`, {
+        method: 'GET',
+        headers: {
+           'Content-Type': 'application/json',
+           'Authorization': `Bearer ${token}`,
+        },
+      })
+        .then(res => {
+          if (!res.ok) {
+            throw new Error(`Failed to fetch business details. Status: ${res.status}`);
+          }
+          return res.json();
+        })
+        .then(data => {
+          setSelectedStudent(prev => ({
+            ...prev,
+            business: data.business,
+          }));
+        })
+        .catch(error => {
+          console.error("Error fetching business details:", error);
+        });
+    }
+  }, [selectedStudent?.id, backendUrl]);
+  
   useEffect(() => {
     async function fetchAssociatedStudents() {
       try {
@@ -314,7 +660,6 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
     }
   }, [tutorId, tutorEmail, backendUrl]);
 
-  // For each associated student, fetch detailed info.
   useEffect(() => {
     async function fetchStudentDetails() {
       try {
@@ -353,10 +698,7 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
     }
   }, [studentIds, tutorId, tutorEmail, backendUrl]);
 
-  // Apply filtering if needed.
   const filteredDetails = filterTodayAppointments ? studentDetails.filter(hadAppointmentToday) : studentDetails;
-
-  // Pagination calculations.
   const indexOfLast = currentPage * studentsPerPage;
   const indexOfFirst = indexOfLast - studentsPerPage;
   const currentStudents = filteredDetails.slice(indexOfFirst, indexOfLast);
@@ -366,7 +708,6 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
     setCurrentPage(value);
   };
 
-  // Render loading state.
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" sx={{ padding: '24px' }}>
@@ -375,19 +716,18 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
     );
   }
 
-  // Handler for Create New button based on innerTab.
   const handleCreateNew = (tabIndex) => {
     if (tabIndex === 3) {
       setShowNewGoalDialog(true);
     } else if (tabIndex === 1) {
       setShowNewTestDataDialog(true);
+    } else if (tabIndex === 0) {
+      setShowNewHomeworkDialog(true);
     } else {
       console.log(`Creating new entry for tab index ${tabIndex}`);
-      // Placeholder for other tabs.
     }
   };
 
-  // Handler for submitting a new goal.
   const handleNewGoalSubmit = async (college) => {
     const payload = {
       firebase_id: selectedStudent.id,
@@ -442,13 +782,58 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
     }
   };
 
-  // Handler for editing test data.
+  const handleEditHomework = (item) => {
+    setEditingHomework(item);
+    setShowEditHomeworkDialog(true);
+  };
+
+  const handleDeleteHomeworkCompletion = async (item) => {
+    const confirmDelete = window.confirm("Are you sure you want to delete this homework completion record?");
+    if (!confirmDelete) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${backendUrl}/api/tutor/delete-homework-completion`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          firebase_id: selectedStudent.id,
+          event_id: item.id,
+        }),
+      });
+      if (!res.ok) {
+        console.error('Failed to delete homework completion. Status:', res.status);
+        alert("Failed to delete homework completion record.");
+        return;
+      }
+      alert("Homework completion record deleted successfully.");
+      const res2 = await fetch(
+        `${backendUrl}/api/tutor/students/${selectedStudent.id}?tutorUserID=${encodeURIComponent(tutorId)}&tutorEmail=${encodeURIComponent(tutorEmail)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+      if (res2.ok) {
+        const updatedStudent = await res2.json();
+        setSelectedStudent(updatedStudent);
+      }
+    } catch (error) {
+      console.error('Error deleting homework completion record:', error);
+      alert("Error deleting homework completion record.");
+    }
+  };
+
   const handleEditTestData = (item) => {
     setEditingTestData(item);
     setShowEditTestDataDialog(true);
   };
 
-  // Handler for submitting edited test data.
   const handleEditTestDataSubmit = (payload) => {
     const token = localStorage.getItem('authToken');
     fetch(`${backendUrl}/api/tutor/edit-test-data`, {
@@ -468,7 +853,6 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
           throw new Error("Failed to edit test data.");
         } else {
           alert("Test data updated successfully.");
-          // Refresh student details after successful update.
           return fetch(
             `${backendUrl}/api/tutor/students/${selectedStudent.id}?tutorUserID=${encodeURIComponent(tutorId)}&tutorEmail=${encodeURIComponent(tutorEmail)}`,
             {
@@ -500,14 +884,12 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
       });
   };
 
-  // Handler for deleting test data.
   const handleDeleteTestData = async (item) => {
     const confirmDelete = window.confirm("Are you sure you want to delete this test data?");
     if (!confirmDelete) return;
   
     try {
       const token = localStorage.getItem('authToken');
-      // Send the delete request with the proper payload.
       const res = await fetch(`${backendUrl}/api/tutor/delete-test-data`, {
         method: 'POST',
         headers: {
@@ -525,7 +907,6 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
         return;
       }
       alert("Test data deleted successfully.");
-      // Refresh the student details so that the UI immediately shows the changes.
       const res2 = await fetch(
         `${backendUrl}/api/tutor/students/${selectedStudent.id}?tutorUserID=${encodeURIComponent(tutorId)}&tutorEmail=${encodeURIComponent(tutorEmail)}`,
         {
@@ -546,7 +927,6 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
     }
   };
 
-  // Handler for deleting a goal.
   const handleDeleteGoal = async (goal) => {
     const confirmDelete = window.confirm("Are you sure you want to delete this goal?");
     if (!confirmDelete) return;
@@ -592,7 +972,48 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
     }
   };
 
-  // Function to return the proper label based on the inner tab.
+  const handleDeleteEvent = async (item) => {
+    const confirmDelete = window.confirm("Are you sure you want to delete this event?");
+    if (!confirmDelete) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${backendUrl}/api/tutor/delete-event`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          firebase_id: selectedStudent.id,
+          event_id: item.id,
+        }),
+      });
+      if (!res.ok) {
+        console.error('Failed to delete event. Status:', res.status);
+        alert("Failed to delete event.");
+        return;
+      }
+      alert("Event deleted successfully.");
+      const res2 = await fetch(
+        `${backendUrl}/api/tutor/students/${selectedStudent.id}?tutorUserID=${encodeURIComponent(tutorId)}&tutorEmail=${encodeURIComponent(tutorEmail)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+      if (res2.ok) {
+        const updatedStudent = await res2.json();
+        setSelectedStudent(updatedStudent);
+      }
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      alert("Error deleting event.");
+    }
+  };
+
   const getCreateButtonLabel = (tabIndex) => {
     switch(tabIndex) {
       case 0: return 'Create New Homework';
@@ -603,12 +1024,17 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
     }
   };
 
+
   const handleEditPersonalDetails = () => {
-    console.log("Edit Personal Details", selectedStudent);
+    if (!selectedStudent) return;
+    // Initialize the dialog fields with the currently stored personal details.
+    setEditingPersonal(selectedStudent.personal);
+    setShowEditPersonalDialog(true);
   };
 
+  // Updated: Open the Edit Business Details dialog
   const handleEditBusinessDetails = () => {
-    console.log("Edit Business Details", selectedStudent);
+    setShowEditBusinessDialog(true);
   };
 
   if (selectedStudent) {
@@ -646,38 +1072,81 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
           {selectedStudent.personal?.name || 'Student Overview'}
         </Typography>
         <Box sx={{ marginBottom: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Typography variant="subtitle1">Personal Details:</Typography>
-            <IconButton size="small" onClick={handleEditPersonalDetails}>
-              <EditIcon fontSize="small" />
-            </IconButton>
-          </Box>
-          {Object.entries(selectedStudent.personal || {}).map(([key, value]) => (
-            <Typography key={key}>
-              <strong>{key}:</strong> {value}
-            </Typography>
-          ))}
-        </Box>
-        <Box sx={{ marginBottom: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Typography variant="subtitle1">Business Details:</Typography>
-            <IconButton size="small" onClick={handleEditBusinessDetails}>
-              <EditIcon fontSize="small" />
-            </IconButton>
-          </Box>
-          <Typography>
-            <strong>Team Lead:</strong> {selectedStudent.business?.team_lead || 'N/A'}
-          </Typography>
-          <Typography>
-            <strong>Test Focus:</strong> {selectedStudent.business?.test_focus || 'N/A'}
-          </Typography>
-        </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Typography variant="subtitle1">Personal Details:</Typography>
+                    <IconButton size="small" onClick={handleEditPersonalDetails}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                  <Typography>
+                    <strong>Name:</strong> {selectedStudent.personal?.name || 'N/A'}
+                  </Typography>
+                  <Typography>
+                    <strong>Accommodations:</strong> {selectedStudent.personal?.accommodations || 'N/A'}
+                  </Typography>
+                  <Typography>
+                    <strong>Grade:</strong> {selectedStudent.personal?.grade || 'N/A'}
+                  </Typography>
+                  <Typography>
+                    <strong>High School:</strong> {selectedStudent.personal?.high_school || 'N/A'}
+                  </Typography>
+                  <Typography>
+                    <strong>Parent Email:</strong> {selectedStudent.personal?.parent_email || 'N/A'}
+                  </Typography>
+                  <Typography>
+                    <strong>Student Email:</strong> {selectedStudent.personal?.student_email || 'N/A'}
+                  </Typography>
+                  <Typography>
+                    <strong>Interests:</strong> {selectedStudent.personal?.interests || 'N/A'}
+                  </Typography>
+                  <Typography>
+                    <strong>Parent Number:</strong> {selectedStudent.personal?.parent_number || 'N/A'}
+                  </Typography>
+                  <Typography>
+                    <strong>Student Number:</strong> {selectedStudent.personal?.student_number || 'N/A'}
+                  </Typography>
+                </Box>
+      <Box sx={{ marginBottom: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Typography variant="subtitle1">Business Details:</Typography>
+        <IconButton size="small" onClick={handleEditBusinessDetails}>
+          <EditIcon fontSize="small" />
+        </IconButton>
+      </Box>
+      <Typography>
+        <strong>Associated Tutors:</strong> {selectedStudent.business?.associated_tutors ? selectedStudent.business.associated_tutors.join(', ') : 'N/A'}
+      </Typography>
+      <Typography>
+        <strong>Scheduler:</strong> {selectedStudent.business?.scheduler || 'N/A'}
+      </Typography>
+      <Typography>
+        <strong>Status:</strong> {selectedStudent.business?.status || 'N/A'}
+      </Typography>
+      <Typography>
+        <strong>Team Lead:</strong> {selectedStudent.business?.team_lead || 'N/A'}
+      </Typography>
+      <Typography>
+        <strong>Test Focus:</strong> {selectedStudent.business?.test_focus || 'N/A'}
+      </Typography>
+      <Typography>
+        <strong>Test Appointment - Registered:</strong> {selectedStudent.business?.test_appointment?.registered_for_test ? 'Yes' : 'No'}
+      </Typography>
+      <Typography>
+        <strong>Test Appointment - Date:</strong> {selectedStudent.business?.test_appointment?.test_date || 'N/A'}
+      </Typography>
+      <Typography>
+        <strong>Notes:</strong> {selectedStudent.business?.notes || 'N/A'}
+      </Typography>
+    </Box>
+
+
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
           <Tabs value={innerTab} onChange={(e, newValue) => setInnerTab(newValue)}>
             <Tab label="Homework Completion" />
             <Tab label="Test Data" />
             <Tab label="Test Dates" />
             <Tab label="Goals" />
+            <Tab label="Events" />
           </Tabs>
           <Button
             variant="contained"
@@ -690,7 +1159,9 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
         </Box>
         <TabPanel value={innerTab} index={0}>
           {sortedHomework.length > 0 ? (
-            sortedHomework.map((item) => <InfoCard key={item.id} item={item} />)
+            sortedHomework.map((item) => (
+              <InfoCard key={item.id} item={item} onEdit={handleEditHomework} onDelete={handleDeleteHomeworkCompletion} />
+            ))
           ) : (
             <Typography>No Homework Completion data available.</Typography>
           )}
@@ -802,6 +1273,15 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
             <Typography>No Goals available.</Typography>
           )}
         </TabPanel>
+        <TabPanel value={innerTab} index={4}>
+          {selectedStudent.events && selectedStudent.events.length > 0 ? (
+            selectedStudent.events.map((item) => (
+              <InfoCard key={item.id} item={item} onDelete={handleDeleteEvent} />
+            ))
+          ) : (
+            <Typography>No Events available.</Typography>
+          )}
+        </TabPanel>
         {showNewGoalDialog && (
           <NewGoalDialog
             open={showNewGoalDialog}
@@ -868,6 +1348,101 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
             }}
           />
         )}
+        {showNewHomeworkDialog && (
+          <CreateHomeworkCompletionDialog
+            open={showNewHomeworkDialog}
+            onClose={() => setShowNewHomeworkDialog(false)}
+            onSubmit={(payload) => {
+              const token = localStorage.getItem('authToken');
+              fetch(`${backendUrl}/api/tutor/create-homework-completion`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                  firebase_id: selectedStudent.id,
+                  ...payload
+                }),
+              })
+                .then((res) => {
+                  if (!res.ok) {
+                    alert("Failed to create homework completion record.");
+                  } else {
+                    alert("Homework completion record created successfully.");
+                    return fetch(
+                      `${backendUrl}/api/tutor/students/${selectedStudent.id}?tutorUserID=${encodeURIComponent(tutorId)}&tutorEmail=${encodeURIComponent(tutorEmail)}`,
+                      {
+                        method: 'GET',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${token}`,
+                        },
+                      }
+                    );
+                  }
+                })
+                .then((res2) => res2 && res2.json())
+                .then((updatedStudent) => {
+                  updatedStudent && setSelectedStudent(updatedStudent);
+                })
+                .catch((error) => console.error(error))
+                .finally(() => setShowNewHomeworkDialog(false));
+            }}
+            tutorFullName={tutorName || ''}
+          />
+        )}
+        {showEditHomeworkDialog && editingHomework && (
+          <EditHomeworkCompletionDialog
+            open={showEditHomeworkDialog}
+            onClose={() => {
+              setShowEditHomeworkDialog(false);
+              setEditingHomework(null);
+            }}
+            onSubmit={(payload) => {
+              const token = localStorage.getItem('authToken');
+              fetch(`${backendUrl}/api/tutor/edit-homework-completion`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                  firebase_id: selectedStudent.id,
+                  ...payload
+                }),
+              })
+                .then((res) => {
+                  if (!res.ok) {
+                    alert("Failed to update homework completion record.");
+                  } else {
+                    alert("Homework completion record updated successfully.");
+                    return fetch(
+                      `${backendUrl}/api/tutor/students/${selectedStudent.id}?tutorUserID=${encodeURIComponent(tutorId)}&tutorEmail=${encodeURIComponent(tutorEmail)}`,
+                      {
+                        method: 'GET',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${token}`,
+                        },
+                      }
+                    );
+                  }
+                })
+                .then((res2) => res2 && res2.json())
+                .then((updatedStudent) => {
+                  updatedStudent && setSelectedStudent(updatedStudent);
+                })
+                .catch((error) => console.error(error))
+                .finally(() => {
+                  setShowEditHomeworkDialog(false);
+                  setEditingHomework(null);
+                });
+            }}
+            tutorFullName={tutorName || ''}
+            initialData={editingHomework}
+          />
+        )}
         {showEditTestDataDialog && editingTestData && (
           <EditTestDataDialog
             open={showEditTestDataDialog}
@@ -922,6 +1497,118 @@ function StudentsTab({ tutorId, tutorEmail, backendUrl, filterTodayAppointments 
                 });
             }}
             initialNotes={currentTestDate ? currentTestDate.notes || '' : ''}
+          />
+        )}
+
+        {showEditPersonalDialog && (
+        <EditPersonalDetailsDialog
+          open={showEditPersonalDialog}
+          onClose={() => {
+            setShowEditPersonalDialog(false);
+            setEditingPersonal(null);
+          }}
+          onSubmit={(payload) => {
+            const token = localStorage.getItem('authToken');
+            // Call the endpoint to update the personal details.
+            fetch(`${backendUrl}/api/tutor/edit-personal-details`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ firebase_id: selectedStudent.id, ...payload })
+            })
+              .then((res) => {
+                if (!res.ok) {
+                  throw new Error("Failed to update personal details.");
+                }
+                // After updating, fetch the student record again.
+                return fetch(`${backendUrl}/api/tutor/students/${selectedStudent.id}?tutorUserID=${encodeURIComponent(tutorId)}&tutorEmail=${encodeURIComponent(tutorEmail)}`, {
+                  method: 'GET',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                  },
+                });
+              })
+              .then((res2) => {
+                if (!res2.ok) {
+                  throw new Error("Failed to refresh student details.");
+                }
+                return res2.json();
+              })
+              .then((updatedStudent) => {
+                setSelectedStudent(updatedStudent);
+              })
+              .catch((error) => {
+                console.error("Error updating personal details:", error);
+                alert("Error updating personal details");
+              })
+              .finally(() => {
+                setShowEditPersonalDialog(false);
+              });
+          }}
+          initialData={editingPersonal}
+        />
+      )}
+
+        {/* NEW: Render the Edit Business Details dialog */}
+        {showEditBusinessDialog && (
+          <EditBusinessDetailsDialog
+            open={showEditBusinessDialog}
+            onClose={() => setShowEditBusinessDialog(false)}
+            initialData={selectedStudent.business}
+            onSubmit={(payload) => {
+              const finalPayload = {
+                firebase_id: selectedStudent.id,
+                ...payload
+              };
+              console.log("Submitting business details payload:", finalPayload);
+              const token = localStorage.getItem('authToken');
+              fetch(`${backendUrl}/api/tutor/edit-business-details`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(finalPayload)
+              })
+              .then((res) => {
+                if (!res.ok) {
+                  alert("Failed to update business details.");
+                  throw new Error("Failed to update business details.");
+                } else {
+                  alert("Business details updated successfully.");
+                  return fetch(
+                    `${backendUrl}/api/tutor/students/${selectedStudent.id}?tutorUserID=${encodeURIComponent(tutorId)}&tutorEmail=${encodeURIComponent(tutorEmail)}`,
+                    {
+                      method: 'GET',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                      },
+                    }
+                  );
+                }
+              })
+              .then((res2) => {
+                if (!res2.ok) {
+                  throw new Error("Failed to refresh student details.");
+                }
+                return res2.json();
+              })
+              .then((updatedStudent) => {
+                setSelectedStudent(updatedStudent);
+              })
+              .catch((error) => {
+                console.error("Error editing business details:", error);
+                alert("Error editing business details.");
+              })
+              .finally(() => {
+                setShowEditBusinessDialog(false);
+              });
+            }}
+            tutorFullName={tutorName}
           />
         )}
       </Box>
@@ -1024,26 +1711,15 @@ const TutorDashboard = () => {
   const [associationComplete, setAssociationComplete] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [profile, setProfile] = useState(null);
-
-  // This is the list of raw names from Today's schedule (from Google Calendar).
   const [todayStudentNames, setTodayStudentNames] = useState([]);
-
-  // NEW STATES for the "Today's Students" tab detail
-  const [todaysStudentDetails, setTodaysStudentDetails] = useState([]);  // array of found DB students
-  const [selectedTodayStudent, setSelectedTodayStudent] = useState(null); // for detail expansion
+  const [todaysStudentDetails, setTodaysStudentDetails] = useState([]);
+  const [selectedTodayStudent, setSelectedTodayStudent] = useState(null);
   const [todayLoading, setTodayLoading] = useState(false);
-
-  // ADD: We'll track if the calendar has finished loading from TodaySchedule
   const [calendarLoaded, setCalendarLoaded] = useState(false);
-
-  // Backend URL 
   const backendUrl = process.env.REACT_APP_API_BASE_URL;
-
-  // Responsive layout
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  // Fetch tutor profile on mount.
   useEffect(() => {
     async function fetchTutorProfile() {
       if (!user || !user.id) {
@@ -1077,7 +1753,6 @@ const TutorDashboard = () => {
     fetchTutorProfile();
   }, [user, backendUrl]);
 
-  // Trigger association process once profile is loaded.
   useEffect(() => {
     async function associateStudents() {
       if (!profile || !profile.user_id || !profile.email) {
@@ -1113,7 +1788,6 @@ const TutorDashboard = () => {
     }
   }, [profile, backendUrl]);
 
-  // ========== NEW: Fetch full detail for today's student names ==========
   useEffect(() => {
     async function fetchTodaysStudentsDetail() {
       if (!todayStudentNames || todayStudentNames.length === 0) {
@@ -1218,13 +1892,93 @@ const TutorDashboard = () => {
     setActiveTab(newValue);
   };
 
-  if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" height="100vh" sx={{ backgroundColor: lightBackground }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
+  const handleEditHomework = (item) => {
+    console.log("Editing homework item in TutorDashboard:", item);
+  };
+
+  const handleDeleteHomeworkCompletionToday = async (item) => {
+    const confirmDelete = window.confirm("Are you sure you want to delete this homework completion record?");
+    if (!confirmDelete) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${backendUrl}/api/tutor/delete-homework-completion`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          firebase_id: selectedTodayStudent.id,
+          event_id: item.id,
+        }),
+      });
+      if (!res.ok) {
+        console.error('Failed to delete homework completion. Status:', res.status);
+        alert("Failed to delete homework completion record.");
+        return;
+      }
+      alert("Homework completion record deleted successfully.");
+      const res2 = await fetch(
+        `${backendUrl}/api/tutor/students/${selectedTodayStudent.id}?tutorUserID=${encodeURIComponent(profile.user_id)}&tutorEmail=${encodeURIComponent(profile.email)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+      if (res2.ok) {
+        const updatedStudent = await res2.json();
+        setSelectedTodayStudent(updatedStudent);
+      }
+    } catch (error) {
+      console.error('Error deleting homework completion record:', error);
+      alert("Error deleting homework completion record.");
+    }
+  };
+
+  const handleDeleteEvent = async (item) => {
+    const confirmDelete = window.confirm("Are you sure you want to delete this event?");
+    if (!confirmDelete) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${backendUrl}/api/tutor/delete-event`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          firebase_id: selectedTodayStudent.id,
+          event_id: item.id,
+        }),
+      });
+      if (!res.ok) {
+        console.error('Failed to delete event. Status:', res.status);
+        alert("Failed to delete event.");
+        return;
+      }
+      alert("Event deleted successfully.");
+      const res2 = await fetch(
+        `${backendUrl}/api/tutor/students/${selectedTodayStudent.id}?tutorUserID=${encodeURIComponent(profile.user_id)}&tutorEmail=${encodeURIComponent(profile.email)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+      if (res2.ok) {
+        const updatedStudent = await res2.json();
+        setSelectedTodayStudent(updatedStudent);
+      }
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      alert("Error deleting event.");
+    }
+  };
 
   return (
     <RootContainer>
@@ -1346,6 +2100,7 @@ const TutorDashboard = () => {
             tutorEmail={profile.email}
             backendUrl={backendUrl}
             filterTodayAppointments={true}
+            tutorName={profile.name}
           />
         </Container>
       )}
@@ -1410,6 +2165,7 @@ const TutorDashboard = () => {
                     <Tab label="Test Data" />
                     <Tab label="Test Dates" />
                     <Tab label="Goals" />
+                    <Tab label="Events" />
                   </Tabs>
                   <TabPanel value={innerTab} index={0}>
                     {selectedTodayStudent.homeworkCompletion && selectedTodayStudent.homeworkCompletion.length > 0 ? (
@@ -1417,7 +2173,9 @@ const TutorDashboard = () => {
                         if(a.timestamp && b.timestamp) return b.timestamp - a.timestamp;
                         if(a.date && b.date) return new Date(b.date) - new Date(a.date);
                         return 0;
-                      }).map((item) => <InfoCard key={item.id} item={item} />)
+                      }).map((item) => (
+                        <InfoCard key={item.id} item={item} onEdit={handleEditHomework} onDelete={handleDeleteHomeworkCompletionToday} />
+                      ))
                     ) : (
                       <Typography>No Homework Completion data available.</Typography>
                     )}
@@ -1452,6 +2210,15 @@ const TutorDashboard = () => {
                       }).map((item) => <InfoCard key={item.id} item={item} />)
                     ) : (
                       <Typography>No Goals available.</Typography>
+                    )}
+                  </TabPanel>
+                  <TabPanel value={innerTab} index={4}>
+                    {selectedTodayStudent.events && selectedTodayStudent.events.length > 0 ? (
+                      selectedTodayStudent.events.map((item) => (
+                        <InfoCard key={item.id} item={item} onDelete={handleDeleteEvent} />
+                      ))
+                    ) : (
+                      <Typography>No Events available.</Typography>
                     )}
                   </TabPanel>
                 </Box>
@@ -1509,6 +2276,7 @@ const TutorDashboard = () => {
                     tutorEmail={profile.email}
                     backendUrl={backendUrl}
                     enableSearch={true}
+                    tutorName={profile.name}
                   />
                 ) : (
                   <Typography variant="body1">Updating your student associations...</Typography>

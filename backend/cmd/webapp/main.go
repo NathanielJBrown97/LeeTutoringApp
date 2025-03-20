@@ -227,6 +227,42 @@ func main() {
 	}).Methods("GET", "OPTIONS")
 
 	// TUTOR TOOLS
+	// edit personal details
+	r.HandleFunc("/api/tutor/edit-personal-details", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(tutordashboard.EditPersonalDetailsHandler(firestoreClient))).ServeHTTP(w, r)
+	}).Methods("POST", "OPTIONS")
+
+	// get personal detalis:
+	r.HandleFunc("/api/tutor/get-personal-details", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(tutordashboard.GetPersonalDetailsHandler(firestoreClient))).ServeHTTP(w, r)
+	}).Methods("GET", "OPTIONS")
+
+	// Get Business Details
+	r.HandleFunc("/api/tutor/get-business-details", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(tutordashboard.GetBusinessDetailsHandler(firestoreClient))).ServeHTTP(w, r)
+	}).Methods("GET", "OPTIONS")
+
+	// edit business data
+	r.HandleFunc("/api/tutor/edit-business-details", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(tutordashboard.EditBusinessDetailsHandler(firestoreClient))).ServeHTTP(w, r)
+	}).Methods("POST", "OPTIONS")
+
 	// delete test data
 	r.HandleFunc("/api/tutor/delete-test-data", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
@@ -243,6 +279,32 @@ func main() {
 			return
 		}
 		authMiddleware(http.HandlerFunc(tutordashboard.CreateTestDataHandler(firestoreClient))).ServeHTTP(w, r)
+	}).Methods("POST", "OPTIONS")
+
+	// Create Homework Completion
+	r.HandleFunc("/api/tutor/create-homework-completion", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(tutordashboard.CreateHomeworkCompletionHandler(firestoreClient))).ServeHTTP(w, r)
+	}).Methods("POST", "OPTIONS")
+
+	// edit Homework Completion
+	r.HandleFunc("/api/tutor/edit-homework-completion", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(tutordashboard.EditHomeworkCompletionHandler(firestoreClient))).ServeHTTP(w, r)
+	}).Methods("POST", "OPTIONS")
+	// delete Homework Completion
+	r.HandleFunc("/api/tutor/delete-homework-completion", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		authMiddleware(http.HandlerFunc(tutordashboard.DeleteHomeworkCompletionHandler(firestoreClient))).ServeHTTP(w, r)
 	}).Methods("POST", "OPTIONS")
 
 	// Create Test Data
