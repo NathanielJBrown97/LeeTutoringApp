@@ -6,6 +6,7 @@ import { AuthProvider, AuthContext } from './contexts/AuthContext';
 import SignIn from './components/SignIn';
 import ParentDashboard from './components/ParentDashboard';
 import TutorDashboard from './components/TutorDashboard';
+import StudentDashboard from './components/StudentDashboard';
 import StudentIntake from './components/StudentIntake';
 import BookingPage from './components/BookingPage';
 import AuthRedirect from './components/AuthRedirect';
@@ -46,6 +47,7 @@ function AppRoutes() {
         <>
           <Route path="/parentdashboard" element={<ParentDashboard />} />
           <Route path="/tutordashboard" element={<TutorDashboard />} />
+          <Route path="/studentdashboard" element={<StudentDashboard />} />
           <Route path="/studentintake" element={<StudentIntake />} />
           <Route path="/booking" element={<BookingPage />} />
           <Route path="/parentprofile" element={<ParentProfile />} />
@@ -57,6 +59,8 @@ function AppRoutes() {
                 to={
                   authState.user?.role === 'tutor'
                     ? '/tutordashboard'
+                    : authState.user?.role === 'student'
+                    ? '/studentdashboard'
                     : '/parentdashboard'
                 }
               />

@@ -17,6 +17,11 @@ type GetBusinessDetailsResponse struct {
 // GetBusinessDetailsHandler returns an HTTP handler that retrieves a student's business details.
 func GetBusinessDetailsHandler(client *firestore.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Add CORS headers to allow requests from your frontend.
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
 		// Handle OPTIONS preflight requests.
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

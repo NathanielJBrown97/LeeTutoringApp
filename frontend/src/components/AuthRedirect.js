@@ -1,5 +1,4 @@
-// src/components/AuthRedirect.js
-
+// File: src/components/AuthRedirect.js
 import React, { useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
@@ -35,6 +34,9 @@ const AuthRedirect = () => {
       if (decoded && decoded.role === 'tutor') {
         navigate('/tutordashboard');
         console.log('Navigated to /tutordashboard');
+      } else if (decoded && decoded.role === 'student') {
+        navigate('/studentdashboard');
+        console.log('Navigated to /studentdashboard');
       } else {
         navigate('/parentdashboard');
         console.log('Navigated to /parentdashboard');

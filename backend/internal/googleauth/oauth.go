@@ -1,5 +1,4 @@
-// backend/internal/googleauth/oauth.go
-
+// File: backend/internal/googleauth/oauth.go
 package googleauth
 
 import (
@@ -9,6 +8,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
+// OAuthHandler initiates the Google OAuth flow
 func (a *App) OAuthHandler(w http.ResponseWriter, r *http.Request) {
 	// Log that the OAuthHandler was triggered
 	log.Println("OAuthHandler triggered")

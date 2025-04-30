@@ -1,12 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Box,
   Typography,
   CircularProgress,
   Card,
   CardContent,
-  Button,
-  Collapse,
   IconButton
 } from '@mui/material';
 import { styled } from '@mui/system';
@@ -62,8 +60,7 @@ function formatStudentName(name = '') {
 }
 
 /**
- * Extracts the "No Show / Reschedule / Cancel / Manage" links from raw HTML
- * so we can display them as separate buttons.
+ * Extracts the "No Show / Reschedule / Cancel / Manage" links from raw HTML.
  */
 function extractActionLinks(text) {
   const actions = {
@@ -151,33 +148,44 @@ function cleanDescription(text) {
 }
 
 /**
- * A single Event card (one appointment).
+ * Formats a given time object.
+ */
+function formatTime(timeObj) {
+  if (timeObj?.dateTime) {
+    return new Date(timeObj.dateTime).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } else if (timeObj?.date) {
+    return new Date(timeObj.date).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+  return '';
+}
+
+/**
+ * Helper: Format a Date object as YYYY-MM-DD in local time.
+ */
+function formatDateLocal(date) {
+  const year = date.getFullYear();
+  const month = ('0' + (date.getMonth() + 1)).slice(-2);
+  const day = ('0' + date.getDate()).slice(-2);
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * EventCard Component
+ * Renders a single event card similar in style to Today's Schedule.
  */
 function EventCard({ event }) {
   const [expanded, setExpanded] = useState(false);
-
   const toggleExpand = () => setExpanded(!expanded);
-
-  const formatTime = (timeObj) => {
-    if (timeObj?.dateTime) {
-      return new Date(timeObj.dateTime).toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } else if (timeObj?.date) {
-      return new Date(timeObj.date).toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    }
-    return '';
-  };
 
   const rawDescription = event.description || '';
   const actionLinks = extractActionLinks(rawDescription);
   let cleaned = cleanDescription(rawDescription);
-
-  // Pull out "Duration" so we can show it separately.
   const { duration, text: remainder } = extractDurationFromText(cleaned);
 
   return (
@@ -186,11 +194,9 @@ function EventCard({ event }) {
         <Typography variant="h6" sx={{ color: '#0e1027', fontWeight: 'bold', mb: 1 }}>
           {event.summary || 'No Title'}
         </Typography>
-
-        <Typography variant="subtitle2" sx={{ color: brandGold, mb: 1 }}>
+        <Typography variant="subtitle2" sx={{ color: '#b29600', mb: 1 }}>
           {formatTime(event.start)} - {formatTime(event.end)}
         </Typography>
-
         {event.location && (
           <Typography variant="body2" sx={{ mb: 1 }}>
             <a 
@@ -203,73 +209,22 @@ function EventCard({ event }) {
             </a>
           </Typography>
         )}
-
         {duration && (
           <Typography variant="body2" sx={{ color: '#0e1027', mb: 1, whiteSpace: 'pre-wrap' }}>
             <strong>Duration:</strong> {duration}
           </Typography>
         )}
-
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
-          <Button
-            variant="text"
-            component="a"
-            href={actionLinks.noShow || '#'}
-            target="_blank"
-            sx={{ textTransform: 'none', color: brandGold, p: 0, minWidth: 'auto' }}
-          >
-            No Show
-          </Button>
-          <Typography variant="body2" sx={{ color: brandGold }}>|</Typography>
-
-          <Button
-            variant="text"
-            component="a"
-            href={actionLinks.reschedule || '#'}
-            target="_blank"
-            sx={{ textTransform: 'none', color: brandGold, p: 0, minWidth: 'auto' }}
-          >
-            Reschedule
-          </Button>
-          <Typography variant="body2" sx={{ color: brandGold }}>|</Typography>
-
-          <Button
-            variant="text"
-            component="a"
-            href={actionLinks.cancel || '#'}
-            target="_blank"
-            sx={{ textTransform: 'none', color: brandGold, p: 0, minWidth: 'auto' }}
-          >
-            Cancel
-          </Button>
-          <Typography variant="body2" sx={{ color: brandGold }}>|</Typography>
-
-          <Button
-            variant="text"
-            component="a"
-            href={actionLinks.manage || '#'}
-            target="_blank"
-            sx={{ textTransform: 'none', color: brandGold, p: 0, minWidth: 'auto' }}
-          >
-            Manage
-          </Button>
-        </Box>
-
         {remainder && (
           <>
-            <Collapse in={expanded}>
-              <Box mt={1}>
-                <Typography variant="body2" sx={{ color: '#0e1027', whiteSpace: 'pre-wrap' }}>
-                  {remainder}
-                </Typography>
-              </Box>
-            </Collapse>
-            <Button
+            <Typography variant="body2" sx={{ color: '#0e1027', whiteSpace: 'pre-wrap' }}>
+              {expanded ? remainder : ''}
+            </Typography>
+            <Typography
               onClick={toggleExpand}
-              sx={{ mt: 1, textTransform: 'none', color: brandGold }}
+              sx={{ mt: 1, textTransform: 'none', color: '#b29600', cursor: 'pointer' }}
             >
               {expanded ? 'Hide Details' : 'Show Details'}
-            </Button>
+            </Typography>
           </>
         )}
       </CardContent>
@@ -278,9 +233,9 @@ function EventCard({ event }) {
 }
 
 /**
- * The main schedule component, used inside TutorDashboard.
- * It extracts all events for today (including past appointments) to build the student names array,
- * while still displaying only upcoming/ongoing events in the slider.
+ * TodaySchedule Component
+ * Retrieves today's calendar events and displays upcoming/ongoing events in a horizontal slider.
+ * Also extracts student names from all events that occur today.
  */
 function TodaySchedule({ tutorId, backendUrl, onStudentNamesUpdate }) {
   const [events, setEvents] = useState([]);
@@ -288,6 +243,9 @@ function TodaySchedule({ tutorId, backendUrl, onStudentNamesUpdate }) {
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [error, setError] = useState(null);
   const scrollRef = useRef(null);
+
+  // Memoize today's date so it stays stable during the session.
+  const today = useMemo(() => new Date(), []);
 
   useEffect(() => {
     async function fetchCalendarEvents() {
@@ -307,8 +265,7 @@ function TodaySchedule({ tutorId, backendUrl, onStudentNamesUpdate }) {
           throw new Error(`Fetch error, status: ${res.status}`);
         }
         const data = await res.json();
-        const today = new Date();
-        // Filter all events that occur today, regardless of whether they've ended
+        // Filter all events that occur today.
         const allTodayEvents = (data.items || []).filter(event => {
           const start = event.start?.dateTime
             ? new Date(event.start.dateTime)
@@ -325,7 +282,7 @@ function TodaySchedule({ tutorId, backendUrl, onStudentNamesUpdate }) {
           return start >= currentTime || (start <= currentTime && end > currentTime);
         });
         setEvents(upcomingEvents);
-        // Extract student names from ALL today's events
+        // Extract student names from ALL today's events.
         const names = allTodayEvents.map(event => {
           const summary = event.summary || 'No Name';
           return formatStudentName(summary);
@@ -344,7 +301,7 @@ function TodaySchedule({ tutorId, backendUrl, onStudentNamesUpdate }) {
     if (tutorId) {
       fetchCalendarEvents();
     }
-  }, [tutorId, backendUrl, onStudentNamesUpdate]);
+  }, [tutorId, backendUrl]);
 
   const scrollLeft = () => {
     if (scrollRef.current) {

@@ -1,5 +1,4 @@
-// backend/internal/googleauth/callback.go
-
+// File: backend/internal/googleauth/callback.go
 package googleauth
 
 import (
@@ -18,6 +17,8 @@ import (
 )
 
 func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		http.Error(w, "Code not found in the request", http.StatusBadRequest)
@@ -25,7 +26,7 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Exchange the authorization code for a token
-	token, err := a.OAuthConfig.Exchange(context.Background(), code)
+	token, err := a.OAuthConfig.Exchange(ctx, code)
 	if err != nil {
 		log.Printf("Failed to exchange code for token: %v", err)
 		http.Error(w, "Failed to exchange authorization code for token", http.StatusBadRequest)
@@ -39,7 +40,7 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payload, err := idtoken.Validate(context.Background(), idTokenStr, a.Config.GOOGLE_CLIENT_ID)
+	payload, err := idtoken.Validate(ctx, idTokenStr, a.Config.GOOGLE_CLIENT_ID)
 	if err != nil {
 		log.Printf("Failed to validate ID token: %v", err)
 		http.Error(w, "Failed to validate ID token", http.StatusInternalServerError)
@@ -58,60 +59,26 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract name
-	name, ok := payload.Claims["name"].(string)
-	if !ok {
-		log.Println("Name not found in ID token")
-		name = ""
-	}
+	// Extract optional fields
+	name, _ := payload.Claims["name"].(string)
+	pictureURL, _ := payload.Claims["picture"].(string)
 
-	// Extract picture URL
-	pictureURL, ok := payload.Claims["picture"].(string)
-	if !ok {
-		log.Println("Picture URL not found in ID token")
-		pictureURL = ""
-	}
+	client := a.FirestoreClient
+	var (
+		role    string
+		docRef  *firestore.DocumentRef
+		docSnap *firestore.DocumentSnapshot
+	)
 
-	// Generate a JWT token with role (and without associated_students for tutors)
-	tokenClaims := jwt.MapClaims{
-		"user_id": userID,
-		"email":   email,
-		"exp":     time.Now().Add(7 * 24 * time.Hour).Unix(), // Token expires in 7 days
-	}
-
-	// Determine the Firestore collection based on the email domain and set the role
-	collectionName := "parents"
+	// 1) Tutor check by company domain
 	if strings.HasSuffix(email, "@leetutoring.com") {
-		collectionName = "tutors"
-		tokenClaims["role"] = "tutor"
-	} else {
-		tokenClaims["role"] = "parent"
-	}
-
-	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, tokenClaims)
-
-	// Use the secret key to sign the token
-	signedToken, err := jwtToken.SignedString([]byte(a.SecretKey))
-	if err != nil {
-		log.Printf("Failed to sign JWT token: %v", err)
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
-		return
-	}
-
-	// Use the existing Firestore client from App
-	firestoreClient := a.FirestoreClient
-
-	// Reference to the user's document in the chosen collection
-	docRef := firestoreClient.Collection(collectionName).Doc(userID)
-	doc, err := docRef.Get(context.Background())
-
-	if err != nil {
-		if status.Code(err) == codes.NotFound {
-			// User doesn't exist, create a new document.
-			// For tutors, we do not create an "associated_students" field.
-			var userData map[string]interface{}
-			if collectionName == "tutors" {
-				userData = map[string]interface{}{
+		role = "tutor"
+		docRef = client.Collection("tutors").Doc(userID)
+		docSnap, err = docRef.Get(ctx)
+		if err != nil {
+			if status.Code(err) == codes.NotFound {
+				// Create new tutor
+				tutorData := map[string]interface{}{
 					"user_id":       userID,
 					"email":         email,
 					"name":          name,
@@ -120,70 +87,158 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 					"refresh_token": token.RefreshToken,
 					"expiry":        token.Expiry,
 				}
-			} else {
-				userData = map[string]interface{}{
-					"user_id":             userID,
-					"email":               email,
-					"name":                name,
-					"picture":             pictureURL,
-					"access_token":        token.AccessToken,
-					"refresh_token":       token.RefreshToken,
-					"expiry":              token.Expiry,
-					"associated_students": []interface{}{},
+				if _, err := docRef.Set(ctx, tutorData); err != nil {
+					log.Printf("Failed to create tutor document: %v", err)
+					http.Error(w, "Failed to create tutor in Firestore", http.StatusInternalServerError)
+					return
 				}
-			}
-			_, err = docRef.Set(context.Background(), userData)
-			if err != nil {
-				http.Error(w, "Failed to create user document in Firestore", http.StatusInternalServerError)
+			} else {
+				log.Printf("Error fetching tutor document: %v", err)
+				http.Error(w, "Failed to check tutor in Firestore", http.StatusInternalServerError)
 				return
 			}
 		} else {
-			http.Error(w, "Failed to check user existence in Firestore", http.StatusInternalServerError)
-			return
+			// Existing tutor: update as needed
+			updates := []firestore.Update{}
+			data := docSnap.Data()
+			if data["access_token"] != token.AccessToken {
+				updates = append(updates, firestore.Update{Path: "access_token", Value: token.AccessToken})
+			}
+			if token.RefreshToken != "" && data["refresh_token"] != token.RefreshToken {
+				updates = append(updates, firestore.Update{Path: "refresh_token", Value: token.RefreshToken})
+			}
+			if exp, ok := data["expiry"].(time.Time); !ok || !exp.Equal(token.Expiry) {
+				updates = append(updates, firestore.Update{Path: "expiry", Value: token.Expiry})
+			}
+			if data["name"] != name {
+				updates = append(updates, firestore.Update{Path: "name", Value: name})
+			}
+			if data["picture"] != pictureURL {
+				updates = append(updates, firestore.Update{Path: "picture", Value: pictureURL})
+			}
+			if len(updates) > 0 {
+				if _, err := docRef.Update(ctx, updates); err != nil {
+					log.Printf("Failed to update tutor document: %v", err)
+					http.Error(w, "Failed to update tutor in Firestore", http.StatusInternalServerError)
+					return
+				}
+			}
 		}
 	} else {
-		// User exists, optionally update tokens if they have changed.
-		data := doc.Data()
-		needsUpdate := false
-		updates := []firestore.Update{}
+		// 2) Student check against students.personal.student_email
+		query := client.Collection("students").Where("personal.student_email", "==", email).Limit(1)
+		iter := query.Documents(ctx)
+		docs, err := iter.GetAll()
+		if err != nil {
+			log.Printf("Error querying students: %v", err)
+			http.Error(w, "Failed to query students in Firestore", http.StatusInternalServerError)
+			return
+		}
+		if len(docs) > 0 {
+			// Existing student
+			role = "student"
+			docSnap = docs[0]
+			docRef = docSnap.Ref
 
-		if data["access_token"] != token.AccessToken {
-			updates = append(updates, firestore.Update{Path: "access_token", Value: token.AccessToken})
-			needsUpdate = true
-		}
-		if data["refresh_token"] != token.RefreshToken && token.RefreshToken != "" {
-			updates = append(updates, firestore.Update{Path: "refresh_token", Value: token.RefreshToken})
-			needsUpdate = true
-		}
-		if data["expiry"] != token.Expiry {
-			updates = append(updates, firestore.Update{Path: "expiry", Value: token.Expiry})
-			needsUpdate = true
-		}
-		// Update name if it has changed.
-		if data["name"] != name {
-			updates = append(updates, firestore.Update{Path: "name", Value: name})
-			needsUpdate = true
-		}
-		// Update picture URL if it has changed.
-		if data["picture"] != pictureURL {
-			updates = append(updates, firestore.Update{Path: "picture", Value: pictureURL})
-			needsUpdate = true
-		}
-
-		if needsUpdate && len(updates) > 0 {
-			_, err = docRef.Update(context.Background(), updates)
+			// Update personal subdocument
+			data := docSnap.Data()
+			personal, _ := data["personal"].(map[string]interface{})
+			updates := []firestore.Update{}
+			if personal["access_token"] != token.AccessToken {
+				updates = append(updates, firestore.Update{Path: "personal.access_token", Value: token.AccessToken})
+			}
+			if token.RefreshToken != "" && personal["refresh_token"] != token.RefreshToken {
+				updates = append(updates, firestore.Update{Path: "personal.refresh_token", Value: token.RefreshToken})
+			}
+			if exp, ok := personal["expiry"].(time.Time); !ok || !exp.Equal(token.Expiry) {
+				updates = append(updates, firestore.Update{Path: "personal.expiry", Value: token.Expiry})
+			}
+			if personal["name"] != name {
+				updates = append(updates, firestore.Update{Path: "personal.name", Value: name})
+			}
+			if personal["picture"] != pictureURL {
+				updates = append(updates, firestore.Update{Path: "personal.picture", Value: pictureURL})
+			}
+			if len(updates) > 0 {
+				if _, err := docRef.Update(ctx, updates); err != nil {
+					log.Printf("Failed to update student personal data: %v", err)
+					http.Error(w, "Failed to update student in Firestore", http.StatusInternalServerError)
+					return
+				}
+			}
+		} else {
+			// 3) Parent fallback
+			role = "parent"
+			docRef = client.Collection("parents").Doc(userID)
+			docSnap, err = docRef.Get(ctx)
 			if err != nil {
-				http.Error(w, "Failed to update user tokens in Firestore", http.StatusInternalServerError)
-				return
+				if status.Code(err) == codes.NotFound {
+					parentData := map[string]interface{}{
+						"user_id":             userID,
+						"email":               email,
+						"name":                name,
+						"picture":             pictureURL,
+						"access_token":        token.AccessToken,
+						"refresh_token":       token.RefreshToken,
+						"expiry":              token.Expiry,
+						"associated_students": []interface{}{},
+					}
+					if _, err := docRef.Set(ctx, parentData); err != nil {
+						log.Printf("Failed to create parent document: %v", err)
+						http.Error(w, "Failed to create parent in Firestore", http.StatusInternalServerError)
+						return
+					}
+				} else {
+					log.Printf("Error fetching parent document: %v", err)
+					http.Error(w, "Failed to check parent in Firestore", http.StatusInternalServerError)
+					return
+				}
+			} else {
+				updates := []firestore.Update{}
+				data := docSnap.Data()
+				if data["access_token"] != token.AccessToken {
+					updates = append(updates, firestore.Update{Path: "access_token", Value: token.AccessToken})
+				}
+				if token.RefreshToken != "" && data["refresh_token"] != token.RefreshToken {
+					updates = append(updates, firestore.Update{Path: "refresh_token", Value: token.RefreshToken})
+				}
+				if exp, ok := data["expiry"].(time.Time); !ok || !exp.Equal(token.Expiry) {
+					updates = append(updates, firestore.Update{Path: "expiry", Value: token.Expiry})
+				}
+				if data["name"] != name {
+					updates = append(updates, firestore.Update{Path: "name", Value: name})
+				}
+				if data["picture"] != pictureURL {
+					updates = append(updates, firestore.Update{Path: "picture", Value: pictureURL})
+				}
+				if len(updates) > 0 {
+					if _, err := docRef.Update(ctx, updates); err != nil {
+						log.Printf("Failed to update parent document: %v", err)
+						http.Error(w, "Failed to update parent in Firestore", http.StatusInternalServerError)
+						return
+					}
+				}
 			}
 		}
 	}
 
-	log.Printf("OAuthCallbackHandler: Received code=%s", code)
-	log.Printf("OAuthCallbackHandler: User authenticated: %s (%s)", userID, email)
-	log.Printf("OAuthCallbackHandler: Redirecting to dashboard")
+	// Generate JWT with correct role
+	tokenClaims := jwt.MapClaims{
+		"user_id": userID,
+		"email":   email,
+		"role":    role,
+		"exp":     time.Now().Add(7 * 24 * time.Hour).Unix(),
+	}
+	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, tokenClaims)
+	signedToken, err := jwtToken.SignedString([]byte(a.SecretKey))
+	if err != nil {
+		log.Printf("Failed to sign JWT token: %v", err)
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
 
-	// Redirect to the React app's dashboard route with the token in the URL fragment.
+	log.Printf("OAuthCallbackHandler: User authenticated: %s (%s), role: %s", userID, email, role)
+	// Redirect to the React app's auth-redirect handler
 	redirectURL := fmt.Sprintf("%s/auth-redirect#%s", "https://lee-tutoring-webapp.web.app", signedToken)
 	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }

@@ -174,6 +174,16 @@ func main() {
 	authMiddleware := middleware.AuthMiddleware(secretKey)
 
 	// TUTOR DASHBOARD HANDLERS
+	// TUTOR TOOLS - Assign Homework route
+	r.HandleFunc("/api/tutor/assign-homework", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		// Wrap with your auth middleware if needed.
+		authMiddleware(http.HandlerFunc(tutordashboard.AssignHomeworkHandler)).ServeHTTP(w, r)
+	}).Methods("POST", "OPTIONS")
+
 	// Tutor Calendar Events route
 	r.HandleFunc("/api/tutor/calendar-events", func(w http.ResponseWriter, r *http.Request) {
 		authMiddleware(http.HandlerFunc(tutorDashboardApp.CalendarEventsHandler)).ServeHTTP(w, r)

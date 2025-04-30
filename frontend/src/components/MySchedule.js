@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Accordion,
   AccordionSummary,
@@ -217,14 +217,13 @@ function EventCard({ event }) {
  * Displays a weekly schedule as 7 Accordions (Sunday -> Saturday) for the current week.
  */
 function MySchedule({ tutorId, backendUrl }) {
-  const [weekDays, setWeekDays] = useState([]);
   const [dailySchedules, setDailySchedules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState(null); // No accordion expanded initially
 
-  // Compute the current week (Sunday through Saturday) on mount.
-  useEffect(() => {
+  // Compute the current week (Sunday through Saturday) using useMemo so that the dependency stays stable.
+  const weekDays = useMemo(() => {
     const today = new Date();
     const startOfWeek = new Date(today);
     startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday as the start of the week
@@ -235,10 +234,10 @@ function MySchedule({ tutorId, backendUrl }) {
       days.push(d);
     }
     console.log('MySchedule: Computed weekDays:', days.map(d => formatDateLocal(d)));
-    setWeekDays(days);
+    return days;
   }, []);
 
-  // Once weekDays are set, fetch all calendar events once.
+  // Once weekDays are computed, fetch all calendar events once.
   useEffect(() => {
     async function fetchEvents() {
       setLoading(true);
@@ -246,7 +245,7 @@ function MySchedule({ tutorId, backendUrl }) {
       try {
         // Compute time range for the current week.
         const timeMin = weekDays[0].toISOString();
-        // Set timeMax as the end of the last day (add 24 hours to the last day)
+        // Set timeMax as the end of the last day (adding 24 hours to the last day)
         const timeMax = new Date(weekDays[6].getTime() + 24 * 60 * 60 * 1000).toISOString();
         console.log('MySchedule: timeMin:', timeMin, 'timeMax:', timeMax);
 
@@ -290,7 +289,6 @@ function MySchedule({ tutorId, backendUrl }) {
         setError(err.message);
       } finally {
         setLoading(false);
-        console.log('MySchedule: Loading complete. dailySchedules:', dailySchedules);
       }
     }
     if (tutorId && weekDays.length === 7) {

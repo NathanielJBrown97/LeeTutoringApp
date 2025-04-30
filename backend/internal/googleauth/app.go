@@ -1,5 +1,4 @@
-// backend/internal/googleauth/app.go
-
+// File: backend/internal/googleauth/app.go
 package googleauth
 
 import (

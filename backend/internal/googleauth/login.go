@@ -1,5 +1,4 @@
-// backend/internal/googleauth/login.go
-
+// File: backend/internal/googleauth/login.go
 package googleauth
 
 import (
@@ -8,6 +7,7 @@ import (
 	"text/template"
 )
 
+// LoginHandler serves the initial login page
 func (a *App) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("index.html")
 	if err != nil {
