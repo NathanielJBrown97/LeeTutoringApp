@@ -48,6 +48,7 @@ import EditTestDataDialog from './editTestData';
 import CreateHomeworkCompletionDialog from './createHomeworkCompletion';
 import EditHomeworkCompletionDialog from './editHomeworkCompletion';
 import AssignHomeworkDialog from './AssignHomeworkDialog';
+import StudentIntakeDialog from './StudentIntakeDialog'; 
 
 // -------------------- Brand Colors --------------------
 const brandBlue = '#0e1027';
@@ -1787,6 +1788,13 @@ const TutorDashboard = () => {
   const backendUrl = process.env.REACT_APP_API_BASE_URL;
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [showStudentIntakeDialog, setShowStudentIntakeDialog] = useState(false);
+  const handleOpenStudentIntake = () => setShowStudentIntakeDialog(true);
+  const handleCloseStudentIntake = () => setShowStudentIntakeDialog(false);
+  const handleSubmitStudentIntake = (data) => {
+    console.log('Intake Data:', data);
+    setShowStudentIntakeDialog(false);
+  };
 
   useEffect(() => {
     async function fetchTutorProfile() {
@@ -2174,7 +2182,7 @@ const TutorDashboard = () => {
             </Tabs>
           </Box>
           <TabPanel value={activeTab} index={0}>
-            {/* ... code for today's students (omitted for brevity) ... */}
+            {/* Todays Students Goes Here ... */}
           </TabPanel>
           <TabPanel value={activeTab} index={1}>
             <SectionContainer>
@@ -2211,10 +2219,33 @@ const TutorDashboard = () => {
           <TabPanel value={activeTab} index={3}>
             <SectionContainer>
               <SectionTitle variant="h6">Tutor Tools</SectionTitle>
-              <Typography variant="body1">
-                Tutor tools coming soon.
-              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6} md={4} lg={3}>
+                  <StyledStudentCard onClick={handleOpenStudentIntake}>
+                    <CardContent>
+                      <Typography variant="h6" align="center">Student Intake</Typography>
+                    </CardContent>
+                  </StyledStudentCard>
+                </Grid>
+                {/* Additional Coming Soon cards */}
+                {['Feature A', 'Feature B', 'Feature C'].map((label) => (
+                  <Grid key={label} item xs={12} sm={6} md={4} lg={3}>
+                    <StyledStudentCard>
+                      <CardContent>
+                        <Typography variant="h6" align="center">{label} (Coming Soon)</Typography>
+                      </CardContent>
+                    </StyledStudentCard>
+                  </Grid>
+                ))}
+              </Grid>
             </SectionContainer>
+            {showStudentIntakeDialog && (
+              <StudentIntakeDialog
+                open={showStudentIntakeDialog}
+                onClose={handleCloseStudentIntake}
+                onSubmit={handleSubmitStudentIntake}
+              />
+            )}
           </TabPanel>
         </ContentWrapper>
       </Container>
