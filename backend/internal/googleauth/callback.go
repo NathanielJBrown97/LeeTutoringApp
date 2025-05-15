@@ -86,6 +86,7 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 					"access_token":  token.AccessToken,
 					"refresh_token": token.RefreshToken,
 					"expiry":        token.Expiry,
+					"userType":      role,
 				}
 				if _, err := docRef.Set(ctx, tutorData); err != nil {
 					log.Printf("Failed to create tutor document: %v", err)
@@ -116,6 +117,9 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 			if data["picture"] != pictureURL {
 				updates = append(updates, firestore.Update{Path: "picture", Value: pictureURL})
 			}
+			if data["userType"] != role {
+				updates = append(updates, firestore.Update{Path: "userType", Value: role})
+			}
 			if len(updates) > 0 {
 				if _, err := docRef.Update(ctx, updates); err != nil {
 					log.Printf("Failed to update tutor document: %v", err)
@@ -135,33 +139,34 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(docs) > 0 {
-			// Existing student
+			// Existing student: drop data onto top-level document
 			role = "student"
 			docSnap = docs[0]
 			docRef = docSnap.Ref
 
-			// Update personal subdocument
-			data := docSnap.Data()
-			personal, _ := data["personal"].(map[string]interface{})
 			updates := []firestore.Update{}
-			if personal["access_token"] != token.AccessToken {
-				updates = append(updates, firestore.Update{Path: "personal.access_token", Value: token.AccessToken})
+			data := docSnap.Data()
+			if data["access_token"] != token.AccessToken {
+				updates = append(updates, firestore.Update{Path: "access_token", Value: token.AccessToken})
 			}
-			if token.RefreshToken != "" && personal["refresh_token"] != token.RefreshToken {
-				updates = append(updates, firestore.Update{Path: "personal.refresh_token", Value: token.RefreshToken})
+			if token.RefreshToken != "" && data["refresh_token"] != token.RefreshToken {
+				updates = append(updates, firestore.Update{Path: "refresh_token", Value: token.RefreshToken})
 			}
-			if exp, ok := personal["expiry"].(time.Time); !ok || !exp.Equal(token.Expiry) {
-				updates = append(updates, firestore.Update{Path: "personal.expiry", Value: token.Expiry})
+			if exp, ok := data["expiry"].(time.Time); !ok || !exp.Equal(token.Expiry) {
+				updates = append(updates, firestore.Update{Path: "expiry", Value: token.Expiry})
 			}
-			if personal["name"] != name {
-				updates = append(updates, firestore.Update{Path: "personal.name", Value: name})
+			if data["name"] != name {
+				updates = append(updates, firestore.Update{Path: "name", Value: name})
 			}
-			if personal["picture"] != pictureURL {
-				updates = append(updates, firestore.Update{Path: "personal.picture", Value: pictureURL})
+			if data["picture"] != pictureURL {
+				updates = append(updates, firestore.Update{Path: "picture", Value: pictureURL})
+			}
+			if data["userType"] != role {
+				updates = append(updates, firestore.Update{Path: "userType", Value: role})
 			}
 			if len(updates) > 0 {
 				if _, err := docRef.Update(ctx, updates); err != nil {
-					log.Printf("Failed to update student personal data: %v", err)
+					log.Printf("Failed to update student document: %v", err)
 					http.Error(w, "Failed to update student in Firestore", http.StatusInternalServerError)
 					return
 				}
@@ -182,6 +187,7 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 						"refresh_token":       token.RefreshToken,
 						"expiry":              token.Expiry,
 						"associated_students": []interface{}{},
+						"userType":            role,
 					}
 					if _, err := docRef.Set(ctx, parentData); err != nil {
 						log.Printf("Failed to create parent document: %v", err)
@@ -210,6 +216,9 @@ func (a *App) OAuthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				if data["picture"] != pictureURL {
 					updates = append(updates, firestore.Update{Path: "picture", Value: pictureURL})
+				}
+				if data["userType"] != role {
+					updates = append(updates, firestore.Update{Path: "userType", Value: role})
 				}
 				if len(updates) > 0 {
 					if _, err := docRef.Update(ctx, updates); err != nil {
